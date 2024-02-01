@@ -1,0 +1,18 @@
+{
+    "env": {
+        "commonjs": true,
+        "es2021": true,
+        "node": true
+    },
+    "extends": ["airbnb", "airbnb/hooks", "eslint:recommended", "plugin:prettier/recommended"],
+    "parserOptions": {
+        "ecmaVersion": "latest"
+    },
+    "rules": {
+        "semi": "warn",
+        "no-underscore-dangle": "error",
+        "func-names": "off",
+        "no-unused-vars": "warn",
+        "no-param-reassign": "error"
+    }
+}
