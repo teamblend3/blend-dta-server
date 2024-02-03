@@ -6,6 +6,8 @@ const logger = require("morgan");
 const path = require("path");
 
 const { swaggerUi, specs } = require("./modules/swagger");
+const projectRoute = require("./routes/projectRoute");
+const userRoute = require("./routes/userRoute");
 
 const app = express();
 const PORT = 3000;
@@ -21,10 +23,18 @@ app.use(cookieParser());
 app.use(cors());
 app.use(logger("dev"));
 
+app.use("/users", userRoute);
+app.use("/projects", projectRoute);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
-
 app.use((req, res, next) => {
   next();
+});
+app.use("/*", (req, res, next) => {
+  try {
+    res.json({ code: 404 });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use((err, req, res) => {
@@ -35,6 +45,8 @@ app.use((err, req, res) => {
   res.render("error");
 });
 
-app.listen(PORT, () => console.log("Server listening"));
+app.listen(PORT, () =>
+  console.log(`Server listening on http://localhost:${PORT}`),
+);
 
 module.exports = app;
