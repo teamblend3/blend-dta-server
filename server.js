@@ -4,13 +4,13 @@ const cors = require("cors");
 const express = require("express");
 const logger = require("morgan");
 const path = require("path");
-
+require("./db");
 const { swaggerUi, specs } = require("./modules/swagger");
 const projectRoute = require("./routes/projectRoute");
 const userRoute = require("./routes/userRoute");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3001;
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "./views"));
@@ -23,12 +23,14 @@ app.use(cookieParser());
 app.use(cors());
 app.use(logger("dev"));
 
-app.use("/users", userRoute);
-app.use("/projects", projectRoute);
+app.use("/api/users", userRoute);
+app.use("/api/projects", projectRoute);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+
 app.use((req, res, next) => {
   next();
 });
+
 app.use("/*", (req, res, next) => {
   try {
     res.json({ code: 404 });
