@@ -10,9 +10,11 @@
     },
     "rules": {
         "semi": "warn",
-        "no-underscore-dangle": "error",
+        "no-underscore-dangle": "warn",
+        "no-console": "off",
         "func-names": "off",
         "no-unused-vars": "warn",
-        "no-param-reassign": "error"
+        "no-param-reassign": "error",
+        "arrow-body-style": "off"
     }
 }
