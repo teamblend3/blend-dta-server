@@ -1,5 +1,59 @@
 const { google } = require("googleapis");
+const mongoose = require("mongoose");
+
 const User = require("../models/User");
+
+const getProject = async (req, res, next) => {
+  try {
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const validateDb = async (req, res, next) => {
+  try {
+    const {
+      body: { databaseUrl, databaseId, databasePassword },
+    } = req;
+    const URL = `mongodb+srv://${databaseId}:${databasePassword}@${databaseUrl}`;
+    const databaseConnection = mongoose.createConnection(URL);
+
+    databaseConnection.on("connected", async () => {
+      const databases = await databaseConnection.db.admin().listDatabases();
+      res.json({
+        success: true,
+        message: "Connected to database successfully",
+        databaseList: databases.databases,
+      });
+    });
+
+    databaseConnection.on("error", err => {
+      res.status(500).json({
+        success: false,
+        message: err.message,
+      });
+      databaseConnection.close();
+    });
+
+    process.on("unhandledRejection", (reason, promise) => {
+      console.log("Unhandled Rejection at:", promise, "reason:", reason);
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "내부 서버 오류",
+    });
+  }
+};
+
+const validateSheet = async (req, res, next) => {
+  try {
+    console.log("validation sheet");
+  } catch (error) {
+    next(error);
+  }
+};
 
 const generateSheetUrl = async (req, res, next) => {
   try {
@@ -28,4 +82,4 @@ const generateSheetUrl = async (req, res, next) => {
   }
 };
 
-module.exports = { generateSheetUrl };
+module.exports = { getProject, generateSheetUrl, validateDb, validateSheet };
