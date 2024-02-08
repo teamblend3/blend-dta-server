@@ -20,11 +20,9 @@ const registrationController = async (req, res, next) => {
       const refreshToken = makeRefreshToken(findUser._id);
 
       await User.findByIdAndUpdate(findUser._id, {
-        $set: {
-          refreshToken,
-          oauthAccessToken,
-          oauthRefreshToken,
-        },
+        refreshToken,
+        oauthAccessToken,
+        oauthRefreshToken,
       });
 
       res
