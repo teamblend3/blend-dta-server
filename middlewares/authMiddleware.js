@@ -1,13 +1,11 @@
-const jwt = require("jsonwebtoken");
 const createHttpError = require("http-errors");
 const User = require("../models/User");
-
+const { COOKIE_MAX_AGE } = require("../utils/constants");
 const {
-  ACCESS_TOKEN_MAX_AGE,
-  REFRESH_TOKEN_MAX_AGE,
-} = require("../utils/constants");
-
-const { jwtVerifyToken } = require("../utils/jwtUtils");
+  makeAccessToken,
+  makeRefreshToken,
+  jwtVerifyToken,
+} = require("../utils/jwtUtils");
 
 const verifyToken = async (req, res, next) => {
   try {
@@ -18,85 +16,81 @@ const verifyToken = async (req, res, next) => {
     if (!accessToken && !refreshToken) {
       req.user = null;
 
-      return next();
-    }
-
-    if (!accessToken && refreshToken) {
-      if (decodedRefreshToken.type) {
-        const findUser = await User.findById(decodedRefreshToken.id);
-
-        req.user = findUser._id;
-
-        const newAccessToken = jwt.sign(
-          { id: findUser._id },
-          process.env.SECRET_KEY,
-        );
-
-        res.status(201).cookie("accessToken", newAccessToken, {
-          maxAge: ACCESS_TOKEN_MAX_AGE,
-          httpOnly: true,
-        });
-
-        return next();
-      }
       return next(createHttpError(401, "Unauthorized"));
     }
 
-    if (
-      !decodedAccessToken.type &&
-      decodedAccessToken.message === "jwt expired"
-    ) {
-      if (!decodedRefreshToken.type) {
+    if (!accessToken || !decodedAccessToken.type) {
+      if (decodedRefreshToken.type) {
+        const findUser = await User.findById(decodedRefreshToken.id);
+
+        if (findUser.refreshToken === refreshToken) {
+          req.user = findUser._id;
+
+          const newAccessToken = makeAccessToken(findUser._id);
+
+          res.status(201).cookie("accessToken", newAccessToken, {
+            maxAge: COOKIE_MAX_AGE,
+            httpOnly: true,
+          });
+
+          return next();
+        }
+
         return next(createHttpError(401, "Unauthorized"));
       }
 
-      const findUser = await User.findById(decodedRefreshToken.id);
+      return next(createHttpError(401, "Unauthorized"));
+    }
 
-      if (findUser.refreshToken === refreshToken) {
-        req.user = findUser._id;
-
-        const newAccessToken = jwt.sign(
-          { id: findUser._id },
-          process.env.SECRET_KEY,
-        );
+    if (decodedAccessToken.message === "jwt expired") {
+      if (decodedRefreshToken.type) {
+        const findUser = await User.findById(decodedRefreshToken.id);
+        const newAccessToken = makeAccessToken(findUser._id);
 
         res.status(201).cookie("accessToken", newAccessToken, {
-          maxAge: ACCESS_TOKEN_MAX_AGE,
+          maxAge: COOKIE_MAX_AGE,
           httpOnly: true,
         });
 
         return next();
       }
 
-      return next();
+      return next(createHttpError(401, "Unauthorized"));
     }
 
-    if (
-      !decodedRefreshToken.type &&
-      decodedRefreshToken.message === "jwt expired"
-    ) {
+    if (!decodedRefreshToken.type) {
       const findUser = await User.findById(decodedAccessToken.id);
 
       req.user = findUser.id;
 
-      const newRefreshToken = jwt.sign(
-        { id: findUser._id },
-        process.env.SECRET_KEY,
-      );
+      if (findUser.refreshToken === refreshToken) {
+        const newRefreshToken = makeRefreshToken(findUser._id);
+
+        res.cookie("refreshToken", newRefreshToken, {
+          maxAge: COOKIE_MAX_AGE,
+          httpOnly: true,
+        });
+
+        return next();
+      }
+
+      return next(createHttpError(401, "Unauthorized"));
+    }
+
+    if (decodedRefreshToken.message === "jwt expired") {
+      const newRefreshToken = makeRefreshToken(decodedRefreshToken.id);
 
       await User.findByIdAndUpdate(decodedAccessToken.id, {
         refreshToken: newRefreshToken,
       });
 
       res.cookie("refreshToken", newRefreshToken, {
-        maxAge: REFRESH_TOKEN_MAX_AGE,
+        maxAge: COOKIE_MAX_AGE,
         httpOnly: true,
       });
 
       return next();
     }
-
-    req.user = decodedAccessToken.id;
 
     return next();
   } catch (error) {

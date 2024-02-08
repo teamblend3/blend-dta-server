@@ -10,14 +10,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  avatarUrl: {
+    type: String,
+    required: true,
+  },
   googleId: {
     type: String,
     required: true,
     unique: true,
-  },
-  avatarUrl: {
-    type: String,
-    required: true,
   },
   projects: [
     {
@@ -25,13 +25,18 @@ const userSchema = new mongoose.Schema({
       ref: "Project",
     },
   ],
-  createdAt: {
-    type: Date,
-    default: Date.now,
-    required: true,
-  },
   refreshToken: {
     type: String,
+    unique: true,
+  },
+  oauthAccessToken: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  oauthRefreshToken: {
+    type: String,
+    required: true,
     unique: true,
   },
 });
