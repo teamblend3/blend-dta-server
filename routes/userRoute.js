@@ -1,9 +1,7 @@
 const express = require("express");
 const User = require("../models/User");
 const { verifyToken } = require("../middlewares/authMiddleware");
-const {
-  registrationController,
-} = require("../controllers/registrationController");
+const { login } = require("../controllers/userController");
 
 const route = express.Router();
 
@@ -16,7 +14,7 @@ route.get("/", (req, res, next) => {
   }
 });
 
-route.post("/login", registrationController);
+route.post("/login", login);
 
 route.get("/validate", verifyToken, async (req, res, next) => {
   try {

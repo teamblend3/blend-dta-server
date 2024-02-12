@@ -27,17 +27,14 @@ const userSchema = new mongoose.Schema({
   ],
   refreshToken: {
     type: String,
-    unique: true,
   },
   oauthAccessToken: {
     type: String,
     required: true,
-    unique: true,
   },
   oauthRefreshToken: {
     type: String,
     required: true,
-    unique: true,
   },
 });
 
