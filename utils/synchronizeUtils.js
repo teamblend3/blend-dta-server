@@ -149,6 +149,7 @@ const synchronize = async (req, res) => {
     const { oauthAccessToken, oauthRefreshToken } = findUser;
 
     const result = await appendToSheet(
+      sheetUrl,
       dataToGoogle,
       oauthAccessToken,
       oauthRefreshToken,
