@@ -1,6 +1,5 @@
 const { google } = require("googleapis");
 const mongoose = require("mongoose");
-
 const User = require("../models/User");
 
 const getProject = async (req, res, next) => {
@@ -14,22 +13,23 @@ const getProject = async (req, res, next) => {
 const validateDb = async (req, res, next) => {
   try {
     const {
-      body: { databaseUrl, databaseId, databasePassword },
+      body: { dbUrl, dbId, dbPassword },
     } = req;
-    const URL = `mongodb+srv://${databaseId}:${databasePassword}@${databaseUrl}`;
+    const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}`;
     const databaseConnection = mongoose.createConnection(URL);
 
-    databaseConnection.on("connected", async () => {
+    databaseConnection.once("connected", async () => {
       const databases = await databaseConnection.db.admin().listDatabases();
       res.json({
         success: true,
         message: "Connected to database successfully",
         databaseList: databases.databases,
       });
+      databaseConnection.close();
     });
 
-    databaseConnection.on("error", err => {
-      res.status(500).json({
+    databaseConnection.once("error", err => {
+      res.status(400).json({
         success: false,
         message: err.message,
       });
@@ -59,10 +59,12 @@ const generateSheetUrl = async (req, res, next) => {
   try {
     const findUser = await User.findById(req.user);
     const auth = new google.auth.OAuth2();
+
     auth.setCredentials({
       access_token: findUser.oauthAccessToken,
       refresh_token: findUser.oauthRefreshToken,
     });
+
     const sheets = google.sheets({ version: "v4", auth });
     const response = await sheets.spreadsheets.create({
       resource: {
@@ -77,7 +79,6 @@ const generateSheetUrl = async (req, res, next) => {
 
     res.json({ success: true, sheetUrl });
   } catch (error) {
-    console.log(error);
     next(error);
   }
 };

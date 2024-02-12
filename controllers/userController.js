@@ -2,7 +2,7 @@ const User = require("../models/User");
 const { makeAccessToken, makeRefreshToken } = require("../utils/jwtUtils");
 const { COOKIE_MAX_AGE } = require("../utils/constants");
 
-const registrationController = async (req, res, next) => {
+const login = async (req, res, next) => {
   try {
     const {
       email,
@@ -12,13 +12,11 @@ const registrationController = async (req, res, next) => {
       oauthAccessToken,
       oauthRefreshToken,
     } = req.body;
-
-    const findUser = await User.findOne({ email });
+    const findUser = await User.findOne({ email }).lean();
 
     if (findUser) {
       const accessToken = makeAccessToken(findUser._id);
       const refreshToken = makeRefreshToken(findUser._id);
-
       await User.findByIdAndUpdate(findUser._id, {
         refreshToken,
         oauthAccessToken,
@@ -38,7 +36,12 @@ const registrationController = async (req, res, next) => {
         })
         .json({
           success: true,
-          userInfo: { email: findUser.email, userName: findUser.userName },
+          userInfo: {
+            email: findUser.email,
+            userName: findUser.userName,
+            avatarUrl: findUser.avatarUrl,
+            userId: findUser._id,
+          },
         });
     } else {
       const newUser = await User.create({
@@ -49,7 +52,6 @@ const registrationController = async (req, res, next) => {
         oauthAccessToken,
         oauthRefreshToken,
       });
-
       const accessToken = makeAccessToken(newUser._id);
       const refreshToken = makeRefreshToken(newUser._id);
 
@@ -68,7 +70,12 @@ const registrationController = async (req, res, next) => {
         })
         .json({
           success: true,
-          userInfo: { email: newUser.email, userName: newUser.userName },
+          userInfo: {
+            email: newUser.email,
+            userName: newUser.userName,
+            avatarUrl: newUser.avatarUrl,
+            userId: newUser._id,
+          },
         });
     }
   } catch (error) {
@@ -76,4 +83,4 @@ const registrationController = async (req, res, next) => {
   }
 };
 
-module.exports = { registrationController };
+module.exports = { login };

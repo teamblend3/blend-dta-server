@@ -1,7 +1,11 @@
 const createHttpError = require("http-errors");
 const User = require("../models/User");
 const { COOKIE_MAX_AGE } = require("../utils/constants");
-const { makeAccessToken, jwtVerifyToken } = require("../utils/jwtUtils");
+const {
+  makeAccessToken,
+  jwtVerifyToken,
+  makeRefreshToken,
+} = require("../utils/jwtUtils");
 
 const verifyToken = async (req, res, next) => {
   try {
@@ -54,6 +58,9 @@ const verifyToken = async (req, res, next) => {
         return next();
       }
 
+      res.clearCookie("accessToken");
+      res.clearCookie("refreshToken");
+
       return next(createHttpError(401, "Unauthorized"));
     }
 
@@ -61,6 +68,27 @@ const verifyToken = async (req, res, next) => {
       !decodedRefreshToken.type ||
       decodedRefreshToken.message === "expired jwt"
     ) {
+      if (decodedAccessToken.type) {
+        const findUser = await User.findById(decodedAccessToken.id);
+        const newRefreshToken = makeRefreshToken(findUser._id);
+
+        await User.findByIdAndUpdate(findUser._id, {
+          refreshToken: newRefreshToken,
+        });
+
+        req.user = findUser._id;
+        res.status(201).cookie("refreshToken", newRefreshToken, {
+          maxAge: COOKIE_MAX_AGE,
+          httpOnly: true,
+        });
+
+        return next();
+      }
+
+      req.user = null;
+      res.clearCookie("accessToken");
+      res.clearCookie("refreshToken");
+
       return next(createHttpError(401, "Unauthorized"));
     }
 
