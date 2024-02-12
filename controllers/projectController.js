@@ -1,6 +1,10 @@
 const { google } = require("googleapis");
 const mongoose = require("mongoose");
+
 const User = require("../models/User");
+const TaskStatus = require("../models/TaskStatus");
+const { GOOGLE_SHEET_SCOPES } = require("../utils/constants");
+const { formatDbData, appendToSheet } = require("../utils/synchronizeUtils");
 
 const getProject = async (req, res, next) => {
   try {
@@ -20,6 +24,7 @@ const validateDb = async (req, res, next) => {
 
     databaseConnection.once("connected", async () => {
       const databases = await databaseConnection.db.admin().listDatabases();
+
       res.json({
         success: true,
         message: "Connected to database successfully",
@@ -27,7 +32,6 @@ const validateDb = async (req, res, next) => {
       });
       databaseConnection.close();
     });
-
     databaseConnection.once("error", err => {
       res.status(400).json({
         success: false,
@@ -35,7 +39,6 @@ const validateDb = async (req, res, next) => {
       });
       databaseConnection.close();
     });
-
     process.on("unhandledRejection", (reason, promise) => {
       console.log("Unhandled Rejection at:", promise, "reason:", reason);
     });
@@ -83,4 +86,68 @@ const generateSheetUrl = async (req, res, next) => {
   }
 };
 
-module.exports = { getProject, generateSheetUrl, validateDb, validateSheet };
+const synchronizeController = async (req, res) => {
+  const {
+    body: { dbUrl, dbId, dbPassword, dbTableName, sheetUrl },
+  } = req;
+  const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}/${dbTableName}`;
+  const databaseConnection = mongoose.createConnection(URL);
+  const fetchedData = [];
+
+  databaseConnection.on("connected", async () => {
+    const spreadsheetId = sheetUrl.match(/\/d\/(.+?)\//)[1];
+    const taskStatus = await TaskStatus.create({
+      statusId: spreadsheetId,
+      message: "CONNECTED_DB_DONE",
+    });
+
+    const selectedDatabase = databaseConnection.db;
+    const collections = await selectedDatabase.listCollections().toArray();
+
+    for (let i = 0; i < collections.length; i += 1) {
+      const collection = collections[i];
+      const collectionName = collection.name;
+      const eachData = selectedDatabase
+        .collection(collectionName)
+        .find()
+        .toArray();
+
+      fetchedData.push(eachData);
+    }
+
+    await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+      message: "FETCH_DATA_DONE",
+    });
+
+    const dataToGoogle = await formatDbData(fetchedData);
+
+    await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+      message: "DATA_FORMATTING_DONE",
+    });
+
+    const findUser = await User.findById(req.user);
+    const { oauthAccessToken, oauthRefreshToken } = findUser;
+
+    const result = await appendToSheet(
+      sheetUrl,
+      dataToGoogle,
+      oauthAccessToken,
+      oauthRefreshToken,
+      GOOGLE_SHEET_SCOPES,
+    );
+
+    await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+      message: "TRANSFER_DATA_DONE",
+    });
+
+    res.json({ success: true, result });
+  });
+};
+
+module.exports = {
+  getProject,
+  generateSheetUrl,
+  validateDb,
+  validateSheet,
+  synchronizeController,
+};

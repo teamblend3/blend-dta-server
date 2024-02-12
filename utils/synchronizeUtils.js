@@ -1,5 +1,4 @@
 const { google } = require("googleapis");
-const mongoose = require("mongoose");
 const TaskStatus = require("../models/TaskStatus");
 const User = require("../models/User");
 const { GOOGLE_SHEET_SCOPES } = require("./constants");
@@ -44,7 +43,15 @@ const formatDbData = async collections => {
     data.push(eachCollectionData);
   }
 
-  return data;
+  const stringifiedData = data.map(outerArray =>
+    outerArray.map(innerArray =>
+      innerArray.map(value =>
+        typeof value === "object" ? JSON.stringify(value) : String(value),
+      ),
+    ),
+  );
+
+  return stringifiedData;
 };
 
 const appendToSheet = async (
@@ -52,31 +59,14 @@ const appendToSheet = async (
   data,
   oauthAccessToken,
   oauthRefreshToken,
+  scopes,
 ) => {
-  function transformCellValue(value) {
-    if (typeof value === "object" && value instanceof Date) {
-      return value.toString();
-    }
-    if (typeof value === "object" && !Array.isArray(value)) {
-      return JSON.stringify(value);
-    }
-    if (Array.isArray(value)) {
-      return value.join(", ");
-    }
-    return value;
-  }
-
-  function transformDataForSheets(value) {
-    return value.map(row => row.map(cell => transformCellValue(cell)));
-  }
-
   try {
     const spreadSheetId = sheetUrl.match(/\/spreadsheets\/d\/(.*?)(\/|$)/)[1];
-
     const auth = new google.auth.OAuth2({
       clientId: process.env.CLIENT_ID,
       clientSecret: process.env.CLIENT_SECRET,
-      scopes: GOOGLE_SHEET_SCOPES,
+      scopes,
     });
 
     auth.setCredentials({
@@ -85,16 +75,38 @@ const appendToSheet = async (
     });
 
     const sheets = google.sheets({ version: "v4", auth });
-    const transformedData = transformDataForSheets(data);
+    const tabCounts = data.length;
 
-    sheets.spreadsheets.values.append({
-      spreadsheetId: spreadSheetId,
-      range: "A1",
-      valueInputOption: "RAW",
-      resource: {
-        values: transformedData,
+    const requests = Array.from(
+      { length: Math.max(tabCounts - 1, 1) },
+      (_, index) => {
+        return {
+          addSheet: {
+            properties: {
+              title: `시트${index + 2}`,
+            },
+          },
+        };
       },
+    );
+
+    const batchUpdateRequest = { requests };
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadSheetId,
+      resource: batchUpdateRequest,
     });
+
+    for (let i = 0; i < tabCounts; i += 1) {
+      sheets.spreadsheets.values.append({
+        spreadsheetId: spreadSheetId,
+        range: `시트${i + 1}!A1`,
+        valueInputOption: "RAW",
+        resource: {
+          values: data[i],
+        },
+      });
+    }
   } catch (error) {
     console.error("에러", error);
 
@@ -105,62 +117,4 @@ const appendToSheet = async (
   }
 };
 
-const synchronize = async (req, res) => {
-  const {
-    body: { dbUrl, dbId, dbPassword, dbTableName, sheetUrl },
-  } = req;
-  const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}/${dbTableName}`;
-  const databaseConnection = mongoose.createConnection(URL);
-  const fetchedData = [];
-
-  databaseConnection.on("connected", async () => {
-    const spreadsheetId = sheetUrl.match(/\/d\/(.+?)\//)[1];
-    const taskStatus = await TaskStatus.create({
-      statusId: spreadsheetId,
-      message: "CONNECTED_DB_DONE",
-    });
-
-    const selectedDatabase = databaseConnection.db;
-    const collections = await selectedDatabase.listCollections().toArray();
-
-    for (let i = 0; i < collections.length; i += 1) {
-      const collection = collections[i];
-      const collectionName = collection.name;
-      const eachData = selectedDatabase
-        .collection(collectionName)
-        .find()
-        .toArray();
-
-      fetchedData.push(eachData);
-    }
-
-    await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-      message: "FETCH_DATA_DONE",
-    });
-
-    const collectionData = [...fetchedData];
-    const dataToGoogle = formatDbData(collectionData);
-
-    await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-      message: "DATA_FORMATTING_DONE",
-    });
-
-    const findUser = await User.findById(req.user);
-    const { oauthAccessToken, oauthRefreshToken } = findUser;
-
-    const result = await appendToSheet(
-      sheetUrl,
-      dataToGoogle,
-      oauthAccessToken,
-      oauthRefreshToken,
-    );
-
-    await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-      message: "TRANSFER_DATA_DONE",
-    });
-
-    res.json({ success: true, result });
-  });
-};
-
-module.exports = { synchronize };
+module.exports = { formatDbData, appendToSheet };
