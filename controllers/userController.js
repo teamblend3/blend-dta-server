@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const { makeAccessToken, makeRefreshToken } = require("../utils/jwtUtils");
 const { COOKIE_MAX_AGE } = require("../utils/constants");
+const CustomError = require("../utils/customError");
 
 const login = async (req, res, next) => {
   try {
@@ -83,4 +84,41 @@ const login = async (req, res, next) => {
   }
 };
 
-module.exports = { login };
+const getUserProfile = async (req, res, next) => {
+  try {
+    const {
+      params: { id },
+      user,
+    } = req;
+
+    if (id === user) {
+      const findUser = await User.findById(id);
+
+      return res.json({ success: true, findUser });
+    }
+
+    throw new CustomError("Unauthorized", 401);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const editUserProfile = async (req, res, next) => {
+  try {
+    const {
+      user,
+      params: { id },
+    } = req;
+
+    if (user === id) {
+      await User.findByIdAndUpdate(id, { email, userName });
+      return res.json({ success: true });
+    }
+
+    throw new CustomError("Unauthorized", 401);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { login, getUserProfile, editUserProfile };
