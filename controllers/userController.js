@@ -123,20 +123,30 @@ const editUserProfile = async (req, res, next) => {
       };
       const { Location } = await uploadFileToS3(avatarFile);
 
-      await User.findByIdAndUpdate(id, {
-        email,
-        userName,
-        avatarUrl: Location,
-      });
-      return res.json({ success: true, avatarUrl: Location });
+      const updatedUser = await User.findByIdAndUpdate(
+        id,
+        {
+          email,
+          userName,
+          avatarUrl: Location,
+        },
+        { new: true },
+      );
+      return res.json({ success: true, updatedUser });
     }
 
-    await User.findByIdAndUpdate(id, {
-      email,
-      userName,
-    });
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      {
+        email,
+        userName,
+      },
+      { new: true },
+    );
 
-    return res.json({ success: true });
+    console.log(updatedUser);
+
+    return res.json({ success: true, updatedUser });
   } catch (error) {
     next(error);
   }
