@@ -1,14 +1,16 @@
 const express = require("express");
 const multer = require("multer");
+
 const User = require("../models/User");
 const { verifyToken } = require("../middlewares/authMiddleware");
-const upload = multer({ dest: "uploads/" }); // 파일이 저장될 경로 설정
-
 const {
   login,
   getUserProfile,
   editUserProfile,
 } = require("../controllers/userController");
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 const route = express.Router();
 

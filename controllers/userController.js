@@ -2,6 +2,7 @@ const User = require("../models/User");
 const { makeAccessToken, makeRefreshToken } = require("../utils/jwtUtils");
 const { COOKIE_MAX_AGE } = require("../utils/constants");
 const CustomError = require("../utils/customError");
+const { uploadFileToS3 } = require("../utils/aws");
 
 const login = async (req, res, next) => {
   try {
@@ -108,14 +109,34 @@ const editUserProfile = async (req, res, next) => {
     const {
       user,
       params: { id },
+      body: { email, userName, fileName },
     } = req;
 
-    if (user === id) {
-      await User.findByIdAndUpdate(id, { email, userName });
-      return res.json({ success: true });
+    if (user !== id) {
+      throw new CustomError("Unauthorized", 401);
     }
 
-    throw new CustomError("Unauthorized", 401);
+    if (req.file) {
+      const avatarFile = {
+        name: `${new Date().toISOString()}-${userName}-${fileName}`,
+        buffer: req.file.buffer,
+      };
+      const { Location } = await uploadFileToS3(avatarFile);
+
+      await User.findByIdAndUpdate(id, {
+        email,
+        userName,
+        avatarUrl: Location,
+      });
+      return res.json({ success: true, avatarUrl: Location });
+    }
+
+    await User.findByIdAndUpdate(id, {
+      email,
+      userName,
+    });
+
+    return res.json({ success: true });
   } catch (error) {
     next(error);
   }
