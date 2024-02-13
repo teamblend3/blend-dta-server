@@ -92,13 +92,13 @@ const getUserProfile = async (req, res, next) => {
       user,
     } = req;
 
-    if (id === user) {
-      const findUser = await User.findById(id);
-
-      return res.json({ success: true, findUser });
+    if (id !== user) {
+      throw new CustomError("Unauthorized", 401);
     }
 
-    throw new CustomError("Unauthorized", 401);
+    const findUser = await User.findById(id);
+
+    return res.json({ success: true, findUser });
   } catch (error) {
     next(error);
   }
