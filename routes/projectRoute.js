@@ -1,19 +1,19 @@
 const express = require("express");
-
-const User = require("../models/User");
 const { verifyToken } = require("../middlewares/authMiddleware");
 const {
   generateSheetUrl,
   validateDb,
   validateSheet,
   getProject,
+  synchronize,
 } = require("../controllers/projectController");
 
 const route = express.Router();
 
-route.get("/:id", getProject);
-route.post("/validation/db", validateDb);
-route.post("/validation/sheet", validateSheet);
+route.get("/:id", verifyToken, getProject);
+route.post("/validation/db", verifyToken, validateDb);
+route.post("/validation/sheet", verifyToken, validateSheet);
 route.get("/generation/sheet", verifyToken, generateSheetUrl);
+route.post("/sync", verifyToken, synchronize);
 
 module.exports = route;
