@@ -10,9 +10,9 @@ const {
 
 const route = express.Router();
 
-route.get("/:id", getProject);
-route.post("/validation/db", validateDb);
-route.post("/validation/sheet", validateSheet);
+route.get("/:id", verifyToken, getProject);
+route.post("/validation/db", verifyToken, validateDb);
+route.post("/validation/sheet", verifyToken, validateSheet);
 route.get("/generation/sheet", verifyToken, generateSheetUrl);
 route.post("/sync", verifyToken, synchronize);
 

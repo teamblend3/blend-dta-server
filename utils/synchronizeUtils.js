@@ -10,18 +10,19 @@ const formatDbData = async collections => {
       columns,
       ...eachCollection.map(rowData => {
         const rowCells = columns.map(columnName => rowData[columnName] || "");
-
         return columnCounts === rowCells.length
           ? rowCells
           : rowCells.map(String);
       }),
     ];
 
-    return eachCollectionData.map(row =>
+    const formattedData = eachCollectionData.map(row =>
       row.map(value =>
         typeof value === "object" ? JSON.stringify(value) : value,
       ),
     );
+
+    return formattedData;
   });
 };
 
@@ -32,7 +33,7 @@ const appendToSheet = async (
   oauthRefreshToken,
 ) => {
   try {
-    const spreadSheetId = sheetUrl.match(/\/spreadsheets\/d\/(.*?)(\/|$)/)[1];
+    const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
     const auth = new google.auth.OAuth2({
       clientId: process.env.CLIENT_ID,
       clientSecret: process.env.CLIENT_SECRET,
@@ -64,6 +65,11 @@ const appendToSheet = async (
         resource: { values },
       });
     });
+
+    return {
+      message: true,
+      collectionCount: tabCounts,
+    };
   } catch (error) {
     console.error("에러", error);
 
@@ -71,6 +77,11 @@ const appendToSheet = async (
       console.error("Google API 응답 에러:", error.response.data.error);
       throw error;
     }
+
+    return {
+      message: false,
+      error: "에러 발생",
+    };
   }
 };
 

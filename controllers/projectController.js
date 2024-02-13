@@ -90,7 +90,13 @@ const generateSheetUrl = async (req, res, next) => {
 const synchronize = async (req, res, next) => {
   try {
     const {
-      body: { dbUrl, dbId, dbPassword, dbTableName, sheetUrl },
+      body: {
+        dbUrl: { value: dbUrl = "" },
+        dbId: { value: dbId = "" },
+        dbPassword: { value: dbPassword = "" },
+        dbTableName: { value: dbTableName = "" },
+        sheetUrl: { value: sheetUrl = "" },
+      },
     } = req;
     const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}/${dbTableName}`;
     const databaseConnection = mongoose.createConnection(URL);
