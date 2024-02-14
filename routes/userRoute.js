@@ -1,7 +1,16 @@
 const express = require("express");
+const multer = require("multer");
+
 const User = require("../models/User");
 const { verifyToken } = require("../middlewares/authMiddleware");
-const { login } = require("../controllers/userController");
+const {
+  login,
+  getUserProfile,
+  editUserProfile,
+} = require("../controllers/userController");
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 const route = express.Router();
 
@@ -16,14 +25,23 @@ route.get("/", (req, res, next) => {
 
 route.post("/login", login);
 
+route.get("/:id/profile", verifyToken, getUserProfile);
+route.post(
+  "/:id/profile",
+  verifyToken,
+  upload.single("avatarUrl"),
+  editUserProfile,
+);
+
 route.get("/validate", verifyToken, async (req, res, next) => {
   try {
     if (req.user) {
       const user = await User.findById(req.user);
-
       const userInfo = {
         userName: user.userName,
         userId: req.user,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
       };
 
       res.json({ success: true, userInfo });
