@@ -2,8 +2,13 @@ const { google } = require("googleapis");
 const mongoose = require("mongoose");
 
 const User = require("../models/User");
+const Project = require("../models/Project");
 const TaskStatus = require("../models/TaskStatus");
 const { formatDbData, appendToSheet } = require("../utils/synchronizeUtils");
+const {
+  hashPassword,
+  formatCurrentDate,
+} = require("../utils/typeConversionUtils");
 
 const getProject = async (req, res, next) => {
   try {
@@ -90,14 +95,16 @@ const generateSheetUrl = async (req, res, next) => {
 const synchronize = async (req, res, next) => {
   try {
     const {
+      user,
       body: {
-        dbUrl: { value: dbUrl = "" },
-        dbId: { value: dbId = "" },
-        dbPassword: { value: dbPassword = "" },
-        dbTableName: { value: dbTableName = "" },
-        sheetUrl: { value: sheetUrl = "" },
+        dbUrl: { value: dbUrl },
+        dbId: { value: dbId },
+        dbPassword: { value: dbPassword },
+        dbTableName: { value: dbTableName },
+        sheetUrl: { value: sheetUrl },
       },
     } = req;
+
     const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}/${dbTableName}`;
     const databaseConnection = mongoose.createConnection(URL);
 
@@ -131,18 +138,34 @@ const synchronize = async (req, res, next) => {
       const findUser = await User.findById(req.user);
       const { oauthAccessToken, oauthRefreshToken } = findUser;
 
-      const result = await appendToSheet(
+      const { collectionCount } = await appendToSheet(
         sheetUrl,
         dataToGoogle,
         oauthAccessToken,
         oauthRefreshToken,
       );
 
-      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-        message: "TRANSFER_DATA_DONE",
+      const project = await Project.create({
+        title: dbTableName,
+        dbUrl,
+        dbId,
+        dbPassword: await hashPassword(dbPassword),
+        sheetUrl,
+        collectionCount,
+        createdAt: formatCurrentDate(),
+        creator: user,
       });
 
-      res.json({ success: true, result });
+      findUser.projects.push(project._id);
+      await findUser.save();
+
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: "TRANSFER_DATA_DONE",
+        project: project._id,
+        createdAt: new Date().toISOString(),
+      });
+
+      res.json({ success: true });
     });
   } catch (error) {
     next(error);
