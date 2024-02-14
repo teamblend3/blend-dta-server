@@ -3,6 +3,12 @@ const ACCESS_TOKEN_EXPIRES_IN = "1h";
 const REFRESH_TOKEN_EXPIRES_IN = "2h";
 const GOOGLE_SHEET_SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 const SALT_ROUNDS = 10;
+const STATUS_MESSAGE = {
+  CONNECT: "CONNECTED_DB_DONE",
+  FETCH: "FETCH_DATA_DONE",
+  FORMAT: "FORMAT_DATA_DONE",
+  TRANSFER: "TRANSFER_DATA_DONE",
+};
 
 module.exports = {
   COOKIE_MAX_AGE,
@@ -10,4 +16,5 @@ module.exports = {
   REFRESH_TOKEN_EXPIRES_IN,
   GOOGLE_SHEET_SCOPES,
   SALT_ROUNDS,
+  STATUS_MESSAGE,
 };

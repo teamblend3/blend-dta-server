@@ -4,11 +4,15 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Project = require("../models/Project");
 const TaskStatus = require("../models/TaskStatus");
-const { formatDbData, appendToSheet } = require("../utils/synchronizeUtils");
 const {
-  hashPassword,
-  formatCurrentDate,
-} = require("../utils/typeConversionUtils");
+  createMongoDbUrl,
+  fetchFromDatabase,
+  formatDbData,
+  appendToSheet,
+} = require("../utils/synchronizeUtils");
+const { hashPassword } = require("../utils/typeConversionUtils");
+const { updateTaskStatus } = require("../utils/modelUtils");
+const { STATUS_MESSAGE } = require("../utils/constants");
 
 const getProject = async (req, res, next) => {
   try {
@@ -21,9 +25,9 @@ const getProject = async (req, res, next) => {
 const validateDb = async (req, res, next) => {
   try {
     const {
-      body: { dbUrl, dbId, dbPassword },
+      body: { dbId, dbPassword, dbUrl },
     } = req;
-    const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}`;
+    const URL = createMongoDbUrl(dbId, dbPassword, dbUrl);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.once("connected", async () => {
@@ -105,39 +109,27 @@ const synchronize = async (req, res, next) => {
       },
     } = req;
 
-    const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}/${dbTableName}`;
+    const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.on("connected", async () => {
-      const spreadSheetId = sheetUrl.match(/\/d\/(.+?)\//)[1];
-      const taskStatus = await TaskStatus.create({
+      const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
+
+      const { _id: taskId } = await TaskStatus.create({
         statusId: spreadSheetId,
-        message: "CONNECTED_DB_DONE",
+        message: STATUS_MESSAGE.CONNECT,
       });
 
       const selectedDatabase = databaseConnection.db;
-      const collections = await selectedDatabase.listCollections().toArray();
+      const fetchedData = await fetchFromDatabase(selectedDatabase);
 
-      const fetchDataPromises = collections.map(async collection => {
-        const collectionName = collection.name;
-        return selectedDatabase.collection(collectionName).find().toArray();
-      });
-
-      const fetchedData = await Promise.all(fetchDataPromises);
-
-      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-        message: "FETCH_DATA_DONE",
-      });
+      await updateTaskStatus(taskId, STATUS_MESSAGE.FETCH);
 
       const dataToGoogle = await formatDbData(fetchedData);
 
-      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-        message: "DATA_FORMATTING_DONE",
-      });
+      await updateTaskStatus(taskId, STATUS_MESSAGE.FORMAT);
 
-      const findUser = await User.findById(req.user);
-      const { oauthAccessToken, oauthRefreshToken } = findUser;
-
+      const { oauthAccessToken, oauthRefreshToken } = await User.findById(user);
       const { collectionCount } = await appendToSheet(
         sheetUrl,
         dataToGoogle,
@@ -145,22 +137,26 @@ const synchronize = async (req, res, next) => {
         oauthRefreshToken,
       );
 
-      const project = await Project.create({
+      const projectData = {
         title: dbTableName,
         dbUrl,
         dbId,
         dbPassword: await hashPassword(dbPassword),
         sheetUrl,
         collectionCount,
-        createdAt: formatCurrentDate(),
+        createdAt: new Date().toISOString(),
         creator: user,
-      });
+      };
 
-      findUser.projects.push(project._id);
-      await findUser.save();
+      const project = await Project.create(projectData);
 
-      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-        message: "TRANSFER_DATA_DONE",
+      await User.findByIdAndUpdate(
+        user,
+        { $push: { projects: project._id } },
+        { new: true },
+      );
+
+      await updateTaskStatus(taskId, STATUS_MESSAGE.TRANSFER, {
         project: project._id,
         createdAt: new Date().toISOString(),
       });
