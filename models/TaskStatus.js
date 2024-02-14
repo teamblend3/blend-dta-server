@@ -6,9 +6,16 @@ const taskStatusSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
+  project: {
+    type: mongoose.Types.ObjectId,
+    ref: "Project",
+  },
   message: {
     type: String,
     required: true,
+  },
+  createdAt: {
+    type: Date,
   },
 });
 
