@@ -3,6 +3,7 @@ const ACCESS_TOKEN_EXPIRES_IN = "1h";
 const REFRESH_TOKEN_EXPIRES_IN = "2h";
 const GOOGLE_SHEET_SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 const SALT_ROUNDS = 10;
+const ITEMS_PER_PAGE = 5;
 
 module.exports = {
   COOKIE_MAX_AGE,
@@ -10,4 +11,5 @@ module.exports = {
   REFRESH_TOKEN_EXPIRES_IN,
   GOOGLE_SHEET_SCOPES,
   SALT_ROUNDS,
+  ITEMS_PER_PAGE,
 };
