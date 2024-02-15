@@ -11,24 +11,22 @@ const {
   getUserProjectsLogs,
   logout,
 } = require("../controllers/userController");
-const { onlyPublic, onlyPrivate } = require("../middlewares/protectRoute");
 
 const route = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-route.post("/login", onlyPublic, login);
-route.get("/projects", verifyToken, onlyPrivate, getUserProjects);
-route.get("/projects/logs", verifyToken, onlyPrivate, getUserProjectsLogs);
-route.get("/:id/profile", verifyToken, onlyPrivate, getUserProfile);
+route.post("/login", login);
+route.get("/projects", verifyToken, getUserProjects);
+route.get("/projects/logs", verifyToken, getUserProjectsLogs);
+route.get("/:id/profile", verifyToken, getUserProfile);
 route.post(
   "/:id/profile",
   verifyToken,
-  onlyPrivate,
   upload.single("avatarUrl"),
   editUserProfile,
 );
-route.get("/validate", verifyToken, onlyPrivate, validateUser);
-route.get("/logout", verifyToken, onlyPrivate, logout);
+route.get("/validate", verifyToken, validateUser);
+route.get("/logout", verifyToken, logout);
 
 module.exports = route;
