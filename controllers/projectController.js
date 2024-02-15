@@ -12,7 +12,10 @@ const {
 
 const getProject = async (req, res, next) => {
   try {
-    res.json({ success: true });
+    const {
+      user,
+      params: { id },
+    } = req;
   } catch (error) {
     next(error);
   }
@@ -96,13 +99,7 @@ const synchronize = async (req, res, next) => {
   try {
     const {
       user,
-      body: {
-        dbUrl: { value: dbUrl },
-        dbId: { value: dbId },
-        dbPassword: { value: dbPassword },
-        dbTableName: { value: dbTableName },
-        sheetUrl: { value: sheetUrl },
-      },
+      body: { dbUrl, dbId, dbPassword, dbTableName, sheetUrl },
     } = req;
 
     const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}/${dbTableName}`;
