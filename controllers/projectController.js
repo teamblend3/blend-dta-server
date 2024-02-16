@@ -4,11 +4,17 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Project = require("../models/Project");
 const TaskStatus = require("../models/TaskStatus");
-const { formatDbData, appendToSheet } = require("../utils/synchronizeUtils");
+const { getSheetIdIndex, isInvalidSheet } = require("../utils/validate");
 const {
-  hashPassword,
-  formatCurrentDate,
-} = require("../utils/typeConversionUtils");
+  createMongoDbUrl,
+  fetchFromDatabase,
+  formatDbData,
+  appendToSheet,
+} = require("../utils/synchronizeUtils");
+const { hashPassword } = require("../utils/typeConversionUtils");
+const { updateTaskStatus } = require("../utils/modelUtils");
+const { STATUS_MESSAGE } = require("../utils/constants");
+const CustomError = require("../utils/customError");
 
 const getProject = async (req, res, next) => {
   try {
@@ -24,9 +30,9 @@ const getProject = async (req, res, next) => {
 const validateDb = async (req, res, next) => {
   try {
     const {
-      body: { dbUrl, dbId, dbPassword },
+      body: { dbId, dbPassword, dbUrl },
     } = req;
-    const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}`;
+    const URL = createMongoDbUrl(dbId, dbPassword, dbUrl);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.once("connected", async () => {
@@ -40,28 +46,45 @@ const validateDb = async (req, res, next) => {
       databaseConnection.close();
     });
 
-    databaseConnection.once("error", err => {
-      res.status(400).json({
-        success: false,
-        message: err.message,
-      });
-      databaseConnection.close();
+    databaseConnection.once("error", error => {
+      throw new CustomError("Connection Fail", 400);
     });
 
     process.on("unhandledRejection", (reason, promise) => {
       console.log("Unhandled Rejection at:", promise, "reason:", reason);
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "내부 서버 오류",
-    });
+    throw new CustomError(error.message, 500);
   }
 };
 
 const validateSheet = async (req, res, next) => {
   try {
-    console.log("validation sheet");
+    const {
+      body: { sheetUrl },
+    } = req;
+
+    const splitBySlash = sheetUrl.split("/");
+    const sheetIdIndex = getSheetIdIndex(splitBySlash);
+    const invalidSheet = isInvalidSheet(sheetIdIndex, splitBySlash);
+
+    if (invalidSheet) {
+      throw new CustomError("Invalid Google Spread Sheet URl", 400);
+    }
+
+    const sheetId = splitBySlash[sheetIdIndex];
+    const sheets = google.sheets({ version: "v4" });
+    const response = await sheets.spreadsheets.get({ sheetId });
+
+    if (!response || !response.data) {
+      throw new CustomError("Spreadsheet not found", 404);
+    }
+
+    res.json({
+      success: true,
+      message: "Valid Google Spread Sheet URL",
+      spreadsheetInfo: response.data,
+    });
   } catch (error) {
     next(error);
   }
@@ -91,7 +114,7 @@ const generateSheetUrl = async (req, res, next) => {
 
     res.json({ success: true, sheetUrl });
   } catch (error) {
-    next(error);
+    throw new CustomError(error.message, 500);
   }
 };
 
@@ -102,13 +125,13 @@ const synchronize = async (req, res, next) => {
       body: { dbUrl, dbId, dbPassword, dbTableName, sheetUrl },
     } = req;
 
-    const URL = `mongodb+srv://${dbId}:${dbPassword}@${dbUrl}/${dbTableName}`;
+    const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.on("connected", async () => {
-      const statusId = sheetUrl.match(/\/d\/(.+?)\//)[1];
+        const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
       const taskStatus = await TaskStatus.create({
-        statusId,
+        statusId:spreadSheetId,
         message: "CONNECTED_DB_DONE",
       });
 

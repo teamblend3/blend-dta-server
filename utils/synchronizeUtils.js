@@ -1,6 +1,21 @@
 const { google } = require("googleapis");
 const { GOOGLE_SHEET_SCOPES } = require("./constants");
 
+const createMongoDbUrl = (id, password, url, tableName) => {
+  return `mongodb+srv://${id}:${password}@${url}${tableName ? `/${tableName}` : ""}`;
+};
+
+const fetchFromDatabase = async selectedDatabase => {
+  const collections = await selectedDatabase.listCollections().toArray();
+  const fetchDataPromises = collections.map(async collection => {
+    const collectionName = collection.name;
+
+    return selectedDatabase.collection(collectionName).find().toArray();
+  });
+
+  return Promise.all(fetchDataPromises);
+};
+
 const formatDbData = async collections => {
   return collections.map(eachCollection => {
     const columns = Object.keys(eachCollection[0]);
@@ -85,4 +100,9 @@ const appendToSheet = async (
   }
 };
 
-module.exports = { formatDbData, appendToSheet };
+module.exports = {
+  createMongoDbUrl,
+  fetchFromDatabase,
+  formatDbData,
+  appendToSheet,
+};
