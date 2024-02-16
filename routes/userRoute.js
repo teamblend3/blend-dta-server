@@ -8,6 +8,8 @@ const {
   editUserProfile,
   getUserProjects,
   validateUser,
+  getUserProjectsLogs,
+  logout,
 } = require("../controllers/userController");
 
 const route = express.Router();
@@ -16,6 +18,7 @@ const upload = multer({ storage: storage });
 
 route.post("/login", login);
 route.get("/projects", verifyToken, getUserProjects);
+route.get("/projects/logs", verifyToken, getUserProjectsLogs);
 route.get("/:id/profile", verifyToken, getUserProfile);
 route.post(
   "/:id/profile",
@@ -24,13 +27,6 @@ route.post(
   editUserProfile,
 );
 route.get("/validate", verifyToken, validateUser);
-route.get("/logout", async (req, res, next) => {
-  try {
-    res.clearCookie("AccessToken", { httpOnly: true });
-    res.json({ success: true });
-  } catch (error) {
-    next(error);
-  }
-});
+route.get("/logout", verifyToken, logout);
 
 module.exports = route;

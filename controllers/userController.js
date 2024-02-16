@@ -3,6 +3,8 @@ const { makeAccessToken, makeRefreshToken } = require("../utils/jwtUtils");
 const { COOKIE_MAX_AGE, ITEMS_PER_PAGE } = require("../utils/constants");
 const CustomError = require("../utils/customError");
 const { uploadFileToS3 } = require("../utils/aws");
+const Project = require("../models/Project");
+const Log = require("../models/Log");
 
 const login = async (req, res, next) => {
   try {
@@ -85,6 +87,17 @@ const login = async (req, res, next) => {
   }
 };
 
+const logout = async (req, res, next) => {
+  async (req, res, next) => {
+    try {
+      res.clearCookie("AccessToken", { httpOnly: true });
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
 const getUserProfile = async (req, res, next) => {
   try {
     const {
@@ -162,7 +175,7 @@ const getUserProjects = async (req, res, next) => {
     const startIndex = (page - 1) * ITEMS_PER_PAGE;
     const findUser = await User.findById(user).populate({
       path: "projects",
-      select: "title collectionCount createdAt",
+      select: "title dbUrl sheetUrl collectionCount createdAt",
       options: { sort: { createdAt: -1 } },
     });
 
@@ -174,6 +187,21 @@ const getUserProjects = async (req, res, next) => {
         startIndex + ITEMS_PER_PAGE,
       ),
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getUserProjectsLogs = async (req, res, next) => {
+  try {
+    const user = "65cc4c19cef51953f78b674a";
+    const findProjects = await Project.find({ creator: user });
+    const projectIds = findProjects.map(project => project._id);
+    const projectLogs = await Log.find({ project: { $in: projectIds } }).sort({
+      createdAt: -1,
+    });
+
+    res.json({ success: true, logs: projectLogs });
   } catch (error) {
     next(error);
   }
@@ -201,8 +229,10 @@ const validateUser = async (req, res, next) => {
 
 module.exports = {
   login,
+  logout,
   getUserProfile,
   editUserProfile,
   getUserProjects,
+  getUserProjectsLogs,
   validateUser,
 };

@@ -18,7 +18,10 @@ const CustomError = require("../utils/customError");
 
 const getProject = async (req, res, next) => {
   try {
-    res.json({ success: true });
+    const {
+      user,
+      params: { id },
+    } = req;
   } catch (error) {
     next(error);
   }
@@ -119,81 +122,100 @@ const synchronize = async (req, res, next) => {
   try {
     const {
       user,
-      body: {
-        dbUrl: { value: dbUrl },
-        dbId: { value: dbId },
-        dbPassword: { value: dbPassword },
-        dbTableName: { value: dbTableName },
-        sheetUrl: { value: sheetUrl },
-      },
+      body: { dbUrl, dbId, dbPassword, dbTableName, sheetUrl },
     } = req;
 
     const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.on("connected", async () => {
-      try {
         const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
+      const taskStatus = await TaskStatus.create({
+        statusId:spreadSheetId,
+        message: "CONNECTED_DB_DONE",
+      });
 
-        const { _id: taskId } = await TaskStatus.create({
-          statusId: spreadSheetId,
-          message: STATUS_MESSAGE.CONNECT,
-        });
+      const selectedDatabase = databaseConnection.db;
 
-        const selectedDatabase = databaseConnection.db;
-        const fetchedData = await fetchFromDatabase(selectedDatabase);
+      const collections = await selectedDatabase.listCollections().toArray();
 
-        await updateTaskStatus(taskId, STATUS_MESSAGE.FETCH);
+      const fetchDataPromises = collections.map(async collection => {
+        const collectionName = collection.name;
+        return selectedDatabase.collection(collectionName).find().toArray();
+      });
 
-        const formattedData = await formatDbData(fetchedData);
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: "FETCH_DATA_DONE",
+      });
 
-        await updateTaskStatus(taskId, STATUS_MESSAGE.FORMAT);
+      const fetchedData = await Promise.all(fetchDataPromises);
 
-        const { oauthAccessToken, oauthRefreshToken } =
-          await User.findById(user);
-        const { collectionCount } = await appendToSheet(
-          sheetUrl,
-          formattedData,
-          oauthAccessToken,
-          oauthRefreshToken,
-        );
+      const dataToGoogle = await formatDbData(fetchedData);
 
-        const projectData = {
-          title: dbTableName,
-          dbUrl,
-          dbId,
-          dbPassword: await hashPassword(dbPassword),
-          sheetUrl,
-          collectionCount,
-          createdAt: new Date().toISOString(),
-          creator: user,
-        };
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: "DATA_FORMATTING_DONE",
+      });
 
-        const project = await Project.create(projectData);
+      const findUser = await User.findById(req.user);
+      const { oauthAccessToken, oauthRefreshToken } = findUser;
 
-        await User.findByIdAndUpdate(
-          user,
-          { $push: { projects: project._id } },
-          { new: true },
-        );
+      const { collectionCount } = await appendToSheet(
+        sheetUrl,
+        dataToGoogle,
+        oauthAccessToken,
+        oauthRefreshToken,
+      );
 
-        await updateTaskStatus(taskId, STATUS_MESSAGE.TRANSFER, {
-          project: project._id,
-          createdAt: new Date().toISOString(),
-        });
+      const project = await Project.create({
+        title: dbTableName,
+        dbUrl,
+        dbId,
+        dbPassword: await hashPassword(dbPassword),
+        sheetUrl,
+        collectionCount,
+        createdAt: formatCurrentDate(),
+        creator: user,
+      });
 
-        res.json({ success: true });
-      } catch (error) {
-        if (error instanceof CustomError) {
-          res.status(error.status).json({
-            success: false,
-            message: error.message,
-          });
-        } else {
-          throw error;
-        }
-      }
+      findUser.projects.push(project._id);
+      await findUser.save();
+
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: "TRANSFER_DATA_DONE",
+        project: project._id,
+        createdAt: new Date().toISOString(),
+      });
+
+      res.json({ success: true });
     });
+
+    databaseConnection.on("error", async err => {
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: "CONNECTED_DB_FALSE",
+      });
+      res.status(400).json({
+        success: false,
+        message: err.message,
+      });
+      databaseConnection.close();
+    });
+
+    process.on("unhandledRejection", (reason, promise) => {
+      console.log("Unhandled Rejection at:", promise, "reason:", reason);
+    });
+  } catch (error) {
+    console.log("ERROR::", error);
+    next(error);
+  }
+};
+
+const getTaskStatus = async (req, res, next) => {
+  try {
+    const {
+      params: { id },
+    } = req;
+    const taskStatus = await TaskStatus.findOne({ statusId: id });
+    res.json({ success: true, status: taskStatus.message });
   } catch (error) {
     next(error);
   }
@@ -205,4 +227,5 @@ module.exports = {
   validateDb,
   validateSheet,
   synchronize,
+  getTaskStatus,
 };

@@ -6,14 +6,17 @@ const {
   validateSheet,
   getProject,
   synchronize,
+  getTaskStatus,
 } = require("../controllers/projectController");
 
 const route = express.Router();
 
 route.get("/:id", verifyToken, getProject);
+route.get("/:id/logs", verifyToken, getProject);
 route.post("/validation/db", verifyToken, validateDb);
 route.post("/validation/sheet", verifyToken, validateSheet);
 route.get("/generation/sheet", verifyToken, generateSheetUrl);
+route.get("/:id/taskstatus", getTaskStatus);
 route.post("/sync", verifyToken, synchronize);
 
 module.exports = route;
