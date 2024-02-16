@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Project = require("../models/Project");
 const TaskStatus = require("../models/TaskStatus");
+const { getSheetIdIndex, isInvalidSheet } = require("../utils/validate");
 const {
   createMongoDbUrl,
   fetchFromDatabase,
@@ -13,6 +14,7 @@ const {
 const { hashPassword } = require("../utils/typeConversionUtils");
 const { updateTaskStatus } = require("../utils/modelUtils");
 const { STATUS_MESSAGE } = require("../utils/constants");
+const CustomError = require("../utils/customError");
 
 const getProject = async (req, res, next) => {
   try {
@@ -41,28 +43,45 @@ const validateDb = async (req, res, next) => {
       databaseConnection.close();
     });
 
-    databaseConnection.once("error", err => {
-      res.status(400).json({
-        success: false,
-        message: err.message,
-      });
-      databaseConnection.close();
+    databaseConnection.once("error", error => {
+      throw new CustomError("Connection Fail", 400);
     });
 
     process.on("unhandledRejection", (reason, promise) => {
       console.log("Unhandled Rejection at:", promise, "reason:", reason);
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "내부 서버 오류",
-    });
+    throw new CustomError(error.message, 500);
   }
 };
 
 const validateSheet = async (req, res, next) => {
   try {
-    console.log("validation sheet");
+    const {
+      body: { sheetUrl },
+    } = req;
+
+    const splitBySlash = sheetUrl.split("/");
+    const sheetIdIndex = getSheetIdIndex(splitBySlash);
+    const invalidSheet = isInvalidSheet(sheetIdIndex, splitBySlash);
+
+    if (invalidSheet) {
+      throw new CustomError("Invalid Google Spread Sheet URl", 400);
+    }
+
+    const sheetId = splitBySlash[sheetIdIndex];
+    const sheets = google.sheets({ version: "v4" });
+    const response = await sheets.spreadsheets.get({ sheetId });
+
+    if (!response || !response.data) {
+      throw new CustomError("Spreadsheet not found", 404);
+    }
+
+    res.json({
+      success: true,
+      message: "Valid Google Spread Sheet URL",
+      spreadsheetInfo: response.data,
+    });
   } catch (error) {
     next(error);
   }
@@ -92,7 +111,7 @@ const generateSheetUrl = async (req, res, next) => {
 
     res.json({ success: true, sheetUrl });
   } catch (error) {
-    next(error);
+    throw new CustomError(error.message, 500);
   }
 };
 
@@ -113,55 +132,67 @@ const synchronize = async (req, res, next) => {
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.on("connected", async () => {
-      const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
+      try {
+        const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
 
-      const { _id: taskId } = await TaskStatus.create({
-        statusId: spreadSheetId,
-        message: STATUS_MESSAGE.CONNECT,
-      });
+        const { _id: taskId } = await TaskStatus.create({
+          statusId: spreadSheetId,
+          message: STATUS_MESSAGE.CONNECT,
+        });
 
-      const selectedDatabase = databaseConnection.db;
-      const fetchedData = await fetchFromDatabase(selectedDatabase);
+        const selectedDatabase = databaseConnection.db;
+        const fetchedData = await fetchFromDatabase(selectedDatabase);
 
-      await updateTaskStatus(taskId, STATUS_MESSAGE.FETCH);
+        await updateTaskStatus(taskId, STATUS_MESSAGE.FETCH);
 
-      const dataToGoogle = await formatDbData(fetchedData);
+        const formattedData = await formatDbData(fetchedData);
 
-      await updateTaskStatus(taskId, STATUS_MESSAGE.FORMAT);
+        await updateTaskStatus(taskId, STATUS_MESSAGE.FORMAT);
 
-      const { oauthAccessToken, oauthRefreshToken } = await User.findById(user);
-      const { collectionCount } = await appendToSheet(
-        sheetUrl,
-        dataToGoogle,
-        oauthAccessToken,
-        oauthRefreshToken,
-      );
+        const { oauthAccessToken, oauthRefreshToken } =
+          await User.findById(user);
+        const { collectionCount } = await appendToSheet(
+          sheetUrl,
+          formattedData,
+          oauthAccessToken,
+          oauthRefreshToken,
+        );
 
-      const projectData = {
-        title: dbTableName,
-        dbUrl,
-        dbId,
-        dbPassword: await hashPassword(dbPassword),
-        sheetUrl,
-        collectionCount,
-        createdAt: new Date().toISOString(),
-        creator: user,
-      };
+        const projectData = {
+          title: dbTableName,
+          dbUrl,
+          dbId,
+          dbPassword: await hashPassword(dbPassword),
+          sheetUrl,
+          collectionCount,
+          createdAt: new Date().toISOString(),
+          creator: user,
+        };
 
-      const project = await Project.create(projectData);
+        const project = await Project.create(projectData);
 
-      await User.findByIdAndUpdate(
-        user,
-        { $push: { projects: project._id } },
-        { new: true },
-      );
+        await User.findByIdAndUpdate(
+          user,
+          { $push: { projects: project._id } },
+          { new: true },
+        );
 
-      await updateTaskStatus(taskId, STATUS_MESSAGE.TRANSFER, {
-        project: project._id,
-        createdAt: new Date().toISOString(),
-      });
+        await updateTaskStatus(taskId, STATUS_MESSAGE.TRANSFER, {
+          project: project._id,
+          createdAt: new Date().toISOString(),
+        });
 
-      res.json({ success: true });
+        res.json({ success: true });
+      } catch (error) {
+        if (error instanceof CustomError) {
+          res.status(error.status).json({
+            success: false,
+            message: error.message,
+          });
+        } else {
+          throw error;
+        }
+      }
     });
   } catch (error) {
     next(error);
