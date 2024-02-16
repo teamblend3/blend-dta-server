@@ -106,13 +106,14 @@ const synchronize = async (req, res, next) => {
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.on("connected", async () => {
-      const spreadSheetId = sheetUrl.match(/\/d\/(.+?)\//)[1];
+      const statusId = sheetUrl.match(/\/d\/(.+?)\//)[1];
       const taskStatus = await TaskStatus.create({
-        statusId: spreadSheetId,
+        statusId,
         message: "CONNECTED_DB_DONE",
       });
 
       const selectedDatabase = databaseConnection.db;
+
       const collections = await selectedDatabase.listCollections().toArray();
 
       const fetchDataPromises = collections.map(async collection => {
@@ -120,11 +121,11 @@ const synchronize = async (req, res, next) => {
         return selectedDatabase.collection(collectionName).find().toArray();
       });
 
-      const fetchedData = await Promise.all(fetchDataPromises);
-
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
         message: "FETCH_DATA_DONE",
       });
+
+      const fetchedData = await Promise.all(fetchDataPromises);
 
       const dataToGoogle = await formatDbData(fetchedData);
 
@@ -164,6 +165,34 @@ const synchronize = async (req, res, next) => {
 
       res.json({ success: true });
     });
+
+    databaseConnection.on("error", async err => {
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: "CONNECTED_DB_FALSE",
+      });
+      res.status(400).json({
+        success: false,
+        message: err.message,
+      });
+      databaseConnection.close();
+    });
+
+    process.on("unhandledRejection", (reason, promise) => {
+      console.log("Unhandled Rejection at:", promise, "reason:", reason);
+    });
+  } catch (error) {
+    console.log("ERROR::", error);
+    next(error);
+  }
+};
+
+const getTaskStatus = async (req, res, next) => {
+  try {
+    const {
+      params: { id },
+    } = req;
+    const taskStatus = await TaskStatus.findOne({ statusId: id });
+    res.json({ success: true, status: taskStatus.message });
   } catch (error) {
     next(error);
   }
@@ -175,4 +204,5 @@ module.exports = {
   validateDb,
   validateSheet,
   synchronize,
+  getTaskStatus,
 };
