@@ -46,6 +46,7 @@ const appendToSheet = async (
   data,
   oauthAccessToken,
   oauthRefreshToken,
+  collectionNames,
 ) => {
   try {
     const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
@@ -63,19 +64,35 @@ const appendToSheet = async (
     const sheets = google.sheets({ version: "v4", auth });
     const tabCounts = Math.max(data.length, 1);
 
-    const requests = Array.from({ length: tabCounts - 1 }, (_, index) => ({
-      addSheet: { properties: { title: `시트${index + 2}` } },
+    const requests = collectionNames.map(name => ({
+      addSheet: {
+        properties: {
+          title: name,
+        },
+      },
     }));
+
+    requests.push({
+      updateSheetProperties: {
+        properties: {
+          sheetId: 0,
+          hidden: true,
+        },
+        fields: "hidden",
+      },
+    });
 
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: spreadSheetId,
       resource: { requests },
     });
 
-    data.forEach((values, i) => {
-      sheets.spreadsheets.values.append({
+    data.forEach(async (values, i) => {
+      const range = `${collectionNames[i]}!A1`;
+
+      await sheets.spreadsheets.values.append({
         spreadsheetId: spreadSheetId,
-        range: `시트${i + 1}!A1`,
+        range,
         valueInputOption: "RAW",
         resource: { values },
       });

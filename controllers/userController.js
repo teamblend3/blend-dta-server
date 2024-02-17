@@ -88,14 +88,12 @@ const login = async (req, res, next) => {
 };
 
 const logout = async (req, res, next) => {
-  async (req, res, next) => {
-    try {
-      res.clearCookie("AccessToken", { httpOnly: true });
-      res.json({ success: true });
-    } catch (error) {
-      next(error);
-    }
-  };
+  try {
+    res.clearCookie("AccessToken", { httpOnly: true });
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
 };
 
 const getUserProfile = async (req, res, next) => {
@@ -111,7 +109,7 @@ const getUserProfile = async (req, res, next) => {
 
     const findUser = await User.findById(id);
 
-    return res.json({ success: true, findUser });
+    res.json({ success: true, findUser });
   } catch (error) {
     next(error);
   }
@@ -145,21 +143,21 @@ const editUserProfile = async (req, res, next) => {
         },
         { new: true },
       );
-      return res.json({ success: true, updatedUser });
+      res.json({ success: true, updatedUser });
+    } else {
+      const updatedUser = await User.findByIdAndUpdate(
+        id,
+        {
+          email,
+          userName,
+        },
+        { new: true },
+      );
+
+      console.log(updatedUser);
+
+      res.json({ success: true, updatedUser });
     }
-
-    const updatedUser = await User.findByIdAndUpdate(
-      id,
-      {
-        email,
-        userName,
-      },
-      { new: true },
-    );
-
-    console.log(updatedUser);
-
-    return res.json({ success: true, updatedUser });
   } catch (error) {
     next(error);
   }
@@ -167,12 +165,8 @@ const editUserProfile = async (req, res, next) => {
 
 const getUserProjects = async (req, res, next) => {
   try {
-    const {
-      user,
-      query: { page },
-    } = req;
+    const { user } = req;
 
-    const startIndex = (page - 1) * ITEMS_PER_PAGE;
     const findUser = await User.findById(user).populate({
       path: "projects",
       select: "title dbUrl sheetUrl collectionCount createdAt",
@@ -182,10 +176,7 @@ const getUserProjects = async (req, res, next) => {
     res.json({
       success: true,
       projectsLength: findUser.projects.length,
-      projects: findUser.projects.slice(
-        startIndex,
-        startIndex + ITEMS_PER_PAGE,
-      ),
+      projects: findUser.projects,
     });
   } catch (error) {
     next(error);
