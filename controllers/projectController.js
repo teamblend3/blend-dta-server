@@ -7,7 +7,6 @@ const TaskStatus = require("../models/TaskStatus");
 const { getSheetIdIndex, isInvalidSheet } = require("../utils/validate");
 const {
   createMongoDbUrl,
-  fetchFromDatabase,
   formatDbData,
   appendToSheet,
 } = require("../utils/synchronizeUtils");
@@ -127,17 +126,17 @@ const synchronize = async (req, res, next) => {
 
     const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
     const databaseConnection = mongoose.createConnection(URL);
+    const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
 
     databaseConnection.on("connected", async () => {
-        const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
       const taskStatus = await TaskStatus.create({
-        statusId:spreadSheetId,
+        statusId: spreadSheetId,
         message: "CONNECTED_DB_DONE",
       });
 
       const selectedDatabase = databaseConnection.db;
-
       const collections = await selectedDatabase.listCollections().toArray();
+      const collectionNames = collections.map(collection => collection.name);
 
       const fetchDataPromises = collections.map(async collection => {
         const collectionName = collection.name;
@@ -149,7 +148,6 @@ const synchronize = async (req, res, next) => {
       });
 
       const fetchedData = await Promise.all(fetchDataPromises);
-
       const dataToGoogle = await formatDbData(fetchedData);
 
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
@@ -164,6 +162,7 @@ const synchronize = async (req, res, next) => {
         dataToGoogle,
         oauthAccessToken,
         oauthRefreshToken,
+        collectionNames,
       );
 
       const project = await Project.create({
@@ -173,7 +172,7 @@ const synchronize = async (req, res, next) => {
         dbPassword: await hashPassword(dbPassword),
         sheetUrl,
         collectionCount,
-        createdAt: formatCurrentDate(),
+        createdAt: new Date().toISOString(),
         creator: user,
       });
 
@@ -190,7 +189,7 @@ const synchronize = async (req, res, next) => {
     });
 
     databaseConnection.on("error", async err => {
-      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+      await TaskStatus.findByIdAndUpdate(spreadSheetId, {
         message: "CONNECTED_DB_FALSE",
       });
       res.status(400).json({
