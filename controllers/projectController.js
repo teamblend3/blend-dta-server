@@ -45,7 +45,7 @@ const validateDb = async (req, res, next) => {
       databaseConnection.close();
     });
 
-    databaseConnection.once("error", error => {
+    databaseConnection.on("error", error => {
       throw new CustomError("Connection Fail", 400);
     });
 
@@ -113,6 +113,7 @@ const generateSheetUrl = async (req, res, next) => {
 
     res.json({ success: true, sheetUrl });
   } catch (error) {
+    console.log(error);
     throw new CustomError(error.message, 500);
   }
 };
@@ -131,7 +132,7 @@ const synchronize = async (req, res, next) => {
     databaseConnection.on("connected", async () => {
       const taskStatus = await TaskStatus.create({
         statusId: spreadSheetId,
-        message: "CONNECTED_DB_DONE",
+        message: STATUS_MESSAGE.CONNECT,
       });
 
       const selectedDatabase = databaseConnection.db;
@@ -144,14 +145,14 @@ const synchronize = async (req, res, next) => {
       });
 
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-        message: "FETCH_DATA_DONE",
+        message: STATUS_MESSAGE.FETCH,
       });
 
       const fetchedData = await Promise.all(fetchDataPromises);
       const dataToGoogle = await formatDbData(fetchedData);
 
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-        message: "DATA_FORMATTING_DONE",
+        message: STATUS_MESSAGE.FORMAT,
       });
 
       const findUser = await User.findById(req.user);
@@ -180,17 +181,19 @@ const synchronize = async (req, res, next) => {
       await findUser.save();
 
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
-        message: "TRANSFER_DATA_DONE",
+        message: STATUS_MESSAGE.TRANSFER,
         project: project._id,
         createdAt: new Date().toISOString(),
       });
+
+      databaseConnection.close();
 
       res.json({ success: true });
     });
 
     databaseConnection.on("error", async err => {
       await TaskStatus.findByIdAndUpdate(spreadSheetId, {
-        message: "CONNECTED_DB_FALSE",
+        message: STATUS_MESSAGE.FAIL,
       });
       res.status(400).json({
         success: false,
@@ -203,7 +206,6 @@ const synchronize = async (req, res, next) => {
       console.log("Unhandled Rejection at:", promise, "reason:", reason);
     });
   } catch (error) {
-    console.log("ERROR::", error);
     next(error);
   }
 };
@@ -214,7 +216,7 @@ const getTaskStatus = async (req, res, next) => {
       params: { id },
     } = req;
     const taskStatus = await TaskStatus.findOne({ statusId: id });
-    res.json({ success: true, status: taskStatus.message });
+    res.json({ success: true, status: taskStatus?.message });
   } catch (error) {
     next(error);
   }
