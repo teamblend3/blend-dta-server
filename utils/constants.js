@@ -1,14 +1,18 @@
 const COOKIE_MAX_AGE = 4 * 60 * 60 * 1000;
 const ACCESS_TOKEN_EXPIRES_IN = "1h";
 const REFRESH_TOKEN_EXPIRES_IN = "2h";
-const GOOGLE_SHEET_SCOPES = "https://www.googleapis.com/auth/spreadsheets";
+const GOOGLE_SHEET_SCOPES = [
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+];
 const SALT_ROUNDS = 10;
 const ITEMS_PER_PAGE = 5;
 const STATUS_MESSAGE = {
-  CONNECT: "CONNECTED_DB_DONE",
-  FETCH: "FETCH_DATA_DONE",
-  FORMAT: "FORMAT_DATA_DONE",
-  TRANSFER: "TRANSFER_DATA_DONE",
+  CONNECTED: "CONNECTED_DB_DONE",
+  FETCHED: "FETCH_DATA_DONE",
+  FORMATTED: "DATA_FORMATTING_DONE",
+  TRANSFERRED: "TRANSFER_DATA_DONE",
 };
 
 module.exports = {
