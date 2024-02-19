@@ -9,6 +9,7 @@ const {
   createMongoDbUrl,
   formatDbData,
   appendToSheet,
+  getDataPreview,
 } = require("../utils/synchronizeUtils");
 const { hashPassword } = require("../utils/typeConversionUtils");
 const { updateTaskStatus } = require("../utils/modelUtils");
@@ -93,6 +94,7 @@ const generateSheetUrl = async (req, res, next) => {
   try {
     const findUser = await User.findById(req.user);
     const auth = new google.auth.OAuth2();
+    auth.forceRefreshOnFailure = true;
 
     auth.setCredentials({
       access_token: findUser.oauthAccessToken,
@@ -165,6 +167,8 @@ const synchronize = async (req, res, next) => {
         collectionNames,
       );
 
+      const dataPreview = getDataPreview(collectionNames, fetchedData);
+
       const project = await Project.create({
         title: dbTableName,
         dbUrl,
@@ -172,6 +176,8 @@ const synchronize = async (req, res, next) => {
         dbPassword: await hashPassword(dbPassword),
         sheetUrl,
         collectionCount,
+        collectionNames,
+        dataPreview,
         createdAt: new Date().toISOString(),
         creator: user,
       });

@@ -25,6 +25,18 @@ const projectSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  collectionNames: [
+    {
+      type: String,
+      default: [],
+    },
+  ],
+  dataPreview: [
+    {
+      type: Object,
+      default: [],
+    },
+  ],
   createdAt: {
     type: Date,
     default: new Date(),
