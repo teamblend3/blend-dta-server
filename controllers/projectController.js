@@ -14,7 +14,7 @@ const {
   getDataPreview,
 } = require("../utils/synchronizeUtils");
 const { hashPassword } = require("../utils/typeConversionUtils");
-const { STATUS_MESSAGE } = require("../utils/constants");
+const { STATUS_MESSAGE, CREATE_LOG_MESSAGE } = require("../utils/constants");
 const CustomError = require("../utils/customError");
 
 const getProject = async (req, res, next) => {
@@ -194,13 +194,13 @@ const synchronize = async (req, res, next) => {
         project: project._id,
         createdAt: new Date().toISOString(),
       });
-      
+
       await Log.create({
         type: "CREATE",
-        message: "Project created successfully",
+        message: CREATE_LOG_MESSAGE,
         project: project._id,
       });
-      
+
       databaseConnection.close();
 
       res.json({ success: true });
