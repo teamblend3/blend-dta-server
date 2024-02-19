@@ -7,6 +7,7 @@ const GOOGLE_SHEET_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
 ];
+const REDIRECT_URI = "http://localhost:5173";
 const STATUS_MESSAGE = {
   CONNECTED: "CONNECTED_DB_DONE",
   FETCHED: "FETCH_DATA_DONE",

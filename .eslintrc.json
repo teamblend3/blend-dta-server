@@ -15,6 +15,7 @@
         "func-names": "off",
         "no-unused-vars": "warn",
         "no-param-reassign": "error",
-        "arrow-body-style": "off"
+        "arrow-body-style": "off",
+        "consistent-return": "off"
     }
 }
