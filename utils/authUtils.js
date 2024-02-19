@@ -1,6 +1,6 @@
 const { google } = require("googleapis");
 const { makeAccessToken, makeRefreshToken } = require("./jwtUtils");
-const { COOKIE_MAX_AGE } = require("./constants");
+const { COOKIE_MAX_AGE, REDIRECT_URI } = require("./constants");
 
 const User = require("../models/User");
 
@@ -8,7 +8,7 @@ function configureOAuthClient() {
   return new google.auth.OAuth2(
     process.env.CLIENT_ID,
     process.env.CLIENT_SECRET,
-    "http://localhost:5173",
+    REDIRECT_URI,
   );
 }
 
