@@ -4,12 +4,16 @@ const REFRESH_TOKEN_EXPIRES_IN = "15d";
 const GOOGLE_SHEET_SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 const SALT_ROUNDS = 10;
 const ITEMS_PER_PAGE = 5;
+const GOOGLE_SHEET_SCOPES = [
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+];
 const STATUS_MESSAGE = {
-  CONNECT: "CONNECTED_DB_DONE",
-  FETCH: "FETCH_DATA_DONE",
-  FORMAT: "DATA_FORMATTING_DONE",
-  TRANSFER: "TRANSFER_DATA_DONE",
-  FAIL: "CONNECTED_DB_FALSE",
+  CONNECTED: "CONNECTED_DB_DONE",
+  FETCHED: "FETCH_DATA_DONE",
+  FORMATTED: "DATA_FORMATTING_DONE",
+  TRANSFERRED: "TRANSFER_DATA_DONE",
 };
 
 module.exports = {
