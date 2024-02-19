@@ -50,7 +50,7 @@ const validateDb = async (req, res, next) => {
       databaseConnection.close();
     });
 
-    databaseConnection.once("error", error => {
+    databaseConnection.on("error", error => {
       throw new CustomError("Connection Fail", 400);
     });
 
@@ -194,19 +194,21 @@ const synchronize = async (req, res, next) => {
         project: project._id,
         createdAt: new Date().toISOString(),
       });
-
+      
       await Log.create({
         type: "CREATE",
         message: "Project created successfully",
         project: project._id,
       });
+      
+      databaseConnection.close();
 
       res.json({ success: true });
     });
 
     databaseConnection.on("error", async err => {
       await TaskStatus.findByIdAndUpdate(spreadSheetId, {
-        message: "CONNECTED_DB_FALSE",
+        message: STATUS_MESSAGE.FAIL,
       });
 
       res.status(400).json({
