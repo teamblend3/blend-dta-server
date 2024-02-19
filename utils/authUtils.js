@@ -1,8 +1,10 @@
-import { google } from "googleapis";
-import { makeAccessToken, makeRefreshToken } from "./jwtUtils";
-import { COOKIE_MAX_AGE } from "./constants";
+const { google } = require("googleapis");
+const { makeAccessToken, makeRefreshToken } = require("./jwtUtils");
+const { COOKIE_MAX_AGE } = require("./constants");
 
-export function configureOAuthClient() {
+const User = require("../models/User");
+
+function configureOAuthClient() {
   return new google.auth.OAuth2(
     process.env.CLIENT_ID,
     process.env.CLIENT_SECRET,
@@ -10,20 +12,20 @@ export function configureOAuthClient() {
   );
 }
 
-export async function getOAuthTokens(code, auth) {
+async function getOAuthTokens(code, auth) {
   const { tokens } = await auth.getToken(code);
   auth.setCredentials(tokens);
   return tokens;
 }
 
-export async function fetchGoogleUserInfo(auth) {
+async function fetchGoogleUserInfo(auth) {
   const userAuth = google.oauth2({ auth, version: "v2" });
   const { data } = await userAuth.userinfo.get();
   return data;
 }
 
-export async function createUser(userInfo, tokens) {
-  return await User.create({
+async function createUser(userInfo, tokens) {
+  const newUser = await User.create({
     email: userInfo.email,
     userName: userInfo.name,
     avatarUrl: userInfo.picture,
@@ -31,23 +33,24 @@ export async function createUser(userInfo, tokens) {
     oauthAccessToken: tokens.access_token,
     oauthRefreshToken: tokens.refresh_token,
   });
+  return newUser;
 }
 
-export async function updateUserTokens(userId, tokens) {
+async function updateUserTokens(userId, tokens) {
   await User.findByIdAndUpdate(userId, {
     oauthAccessToken: tokens.access_token,
     oauthRefreshToken: tokens.refresh_token,
   });
 }
 
-export function generateTokens(userId) {
+function generateTokens(userId) {
   return {
     accessToken: makeAccessToken(userId),
     refreshToken: makeRefreshToken(userId),
   };
 }
 
-export function sendAuthCookies(res, accessToken, refreshToken) {
+function sendAuthCookies(res, accessToken, refreshToken) {
   res
     .cookie("accessToken", accessToken, {
       maxAge: COOKIE_MAX_AGE,
@@ -61,7 +64,7 @@ export function sendAuthCookies(res, accessToken, refreshToken) {
     });
 }
 
-export function sendUserInfoResponse(res, user) {
+function sendUserInfoResponse(res, user) {
   res.json({
     success: true,
     userInfo: {
