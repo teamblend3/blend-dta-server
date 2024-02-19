@@ -117,9 +117,19 @@ const appendToSheet = async (
   }
 };
 
+const getDataPreview = (collectionNames, fetchedData) => {
+  const firstData = fetchedData.map(collection => collection[0]);
+  const dataPreview = collectionNames.map((collectionName, index) => ({
+    [collectionName]: firstData[index],
+  }));
+
+  return dataPreview;
+};
+
 module.exports = {
   createMongoDbUrl,
   fetchFromDatabase,
   formatDbData,
   appendToSheet,
+  getDataPreview,
 };

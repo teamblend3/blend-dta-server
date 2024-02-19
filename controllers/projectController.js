@@ -11,6 +11,7 @@ const {
   createMongoDbUrl,
   formatDbData,
   appendToSheet,
+  getDataPreview,
 } = require("../utils/synchronizeUtils");
 const { hashPassword } = require("../utils/typeConversionUtils");
 const { STATUS_MESSAGE } = require("../utils/constants");
@@ -168,6 +169,9 @@ const synchronize = async (req, res, next) => {
         oauthRefreshToken,
         collectionNames,
       );
+
+      const dataPreview = getDataPreview(collectionNames, fetchedData);
+
       const project = await Project.create({
         title: dbTableName,
         dbUrl,
@@ -175,6 +179,8 @@ const synchronize = async (req, res, next) => {
         dbPassword: await hashPassword(dbPassword),
         sheetUrl,
         collectionCount,
+        collectionNames,
+        dataPreview,
         createdAt: new Date().toISOString(),
         creator: user,
       });
