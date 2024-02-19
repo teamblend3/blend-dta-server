@@ -1,89 +1,40 @@
 const User = require("../models/User");
-const { makeAccessToken, makeRefreshToken } = require("../utils/jwtUtils");
-const { COOKIE_MAX_AGE, ITEMS_PER_PAGE } = require("../utils/constants");
-const CustomError = require("../utils/customError");
-const { uploadFileToS3 } = require("../utils/aws");
+
 const Project = require("../models/Project");
 const Log = require("../models/Log");
 
+const CustomError = require("../utils/customError");
+const { uploadFileToS3 } = require("../utils/aws");
+const {
+  configureOAuthClient,
+  getOAuthTokens,
+  fetchGoogleUserInfo,
+  createUser,
+  updateUserTokens,
+  sendAuthCookies,
+  generateTokens,
+  sendUserInfoResponse,
+} = require("../utils/authUtils");
+
 const login = async (req, res, next) => {
   try {
-    const {
-      email,
-      displayName: userName,
-      photoURL: avatarUrl,
-      uid: googleId,
-      oauthAccessToken,
-      oauthRefreshToken,
-    } = req.body;
-    const findUser = await User.findOne({ email }).lean();
+    const auth = configureOAuthClient();
+    const tokens = await getOAuthTokens(req.body.code, auth);
+    const userInfo = await fetchGoogleUserInfo(auth);
 
-    if (findUser) {
-      const accessToken = makeAccessToken(findUser._id);
-      const refreshToken = makeRefreshToken(findUser._id);
-      await User.findByIdAndUpdate(findUser._id, {
-        refreshToken,
-        oauthAccessToken,
-        oauthRefreshToken,
-      });
+    let user = await User.findOne({ email: userInfo.email }).lean();
 
-      res
-        .cookie("accessToken", accessToken, {
-          maxAge: COOKIE_MAX_AGE,
-          httpOnly: true,
-          secure: true,
-        })
-        .cookie("refreshToken", refreshToken, {
-          maxAge: COOKIE_MAX_AGE,
-          httpOnly: true,
-          secure: true,
-        })
-        .json({
-          success: true,
-          userInfo: {
-            email: findUser.email,
-            userName: findUser.userName,
-            avatarUrl: findUser.avatarUrl,
-            userId: findUser._id,
-          },
-        });
+    if (!user) {
+      user = await createUser(userInfo, tokens);
     } else {
-      const newUser = await User.create({
-        email,
-        userName,
-        avatarUrl,
-        googleId,
-        oauthAccessToken,
-        oauthRefreshToken,
-      });
-      const accessToken = makeAccessToken(newUser._id);
-      const refreshToken = makeRefreshToken(newUser._id);
-
-      await User.findByIdAndUpdate(newUser._id, { refreshToken });
-
-      res
-        .cookie("accessToken", accessToken, {
-          maxAge: COOKIE_MAX_AGE,
-          httpOnly: true,
-          secure: true,
-        })
-        .cookie("refreshToken", refreshToken, {
-          maxAge: COOKIE_MAX_AGE,
-          httpOnly: true,
-          secure: true,
-        })
-        .json({
-          success: true,
-          userInfo: {
-            email: newUser.email,
-            userName: newUser.userName,
-            avatarUrl: newUser.avatarUrl,
-            userId: newUser._id,
-          },
-        });
+      await updateUserTokens(user._id, tokens);
     }
+
+    const { accessToken, refreshToken } = generateTokens(user._id);
+    sendAuthCookies(res, accessToken, refreshToken);
+    sendUserInfoResponse(res, user);
   } catch (error) {
-    console.log(error);
+    next(error);
   }
 };
 
@@ -133,7 +84,6 @@ const editUserProfile = async (req, res, next) => {
         buffer: req.file.buffer,
       };
       const { Location } = await uploadFileToS3(avatarFile);
-
       const updatedUser = await User.findByIdAndUpdate(
         id,
         {
@@ -143,6 +93,7 @@ const editUserProfile = async (req, res, next) => {
         },
         { new: true },
       );
+
       res.json({ success: true, updatedUser });
     } else {
       const updatedUser = await User.findByIdAndUpdate(
@@ -154,8 +105,6 @@ const editUserProfile = async (req, res, next) => {
         { new: true },
       );
 
-      console.log(updatedUser);
-
       res.json({ success: true, updatedUser });
     }
   } catch (error) {
@@ -166,7 +115,6 @@ const editUserProfile = async (req, res, next) => {
 const getUserProjects = async (req, res, next) => {
   try {
     const { user } = req;
-
     const findUser = await User.findById(user).populate({
       path: "projects",
       select: "title dbUrl sheetUrl collectionCount createdAt",
@@ -188,9 +136,11 @@ const getUserProjectsLogs = async (req, res, next) => {
     const user = "65cc4c19cef51953f78b674a";
     const findProjects = await Project.find({ creator: user });
     const projectIds = findProjects.map(project => project._id);
-    const projectLogs = await Log.find({ project: { $in: projectIds } }).sort({
-      createdAt: -1,
-    });
+    const projectLogs = await Log.find({ project: { $in: projectIds } })
+      .sort({
+        createdAt: -1,
+      })
+      .populate("project");
 
     res.json({ success: true, logs: projectLogs });
   } catch (error) {

@@ -12,6 +12,7 @@ const taskStatusSchema = new mongoose.Schema({
   },
   message: {
     type: String,
+    default: "CONNECTED_DB_DONE",
   },
   createdAt: {
     type: Date,
