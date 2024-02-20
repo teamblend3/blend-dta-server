@@ -1,7 +1,6 @@
 const { google } = require("googleapis");
 const { makeAccessToken, makeRefreshToken } = require("./jwtUtils");
 const { COOKIE_MAX_AGE, REDIRECT_URI } = require("./constants");
-
 const User = require("../models/User");
 
 function configureOAuthClient() {
@@ -11,19 +10,16 @@ function configureOAuthClient() {
     REDIRECT_URI,
   );
 }
-
 async function getOAuthTokens(code, auth) {
   const { tokens } = await auth.getToken(code);
   auth.setCredentials(tokens);
   return tokens;
 }
-
 async function fetchGoogleUserInfo(auth) {
   const userAuth = google.oauth2({ auth, version: "v2" });
   const { data } = await userAuth.userinfo.get();
   return data;
 }
-
 async function createUser(userInfo, tokens) {
   const newUser = await User.create({
     email: userInfo.email,
@@ -35,21 +31,18 @@ async function createUser(userInfo, tokens) {
   });
   return newUser;
 }
-
 async function updateUserTokens(userId, tokens) {
   await User.findByIdAndUpdate(userId, {
     oauthAccessToken: tokens.access_token,
     oauthRefreshToken: tokens.refresh_token,
   });
 }
-
 function generateTokens(userId) {
   return {
     accessToken: makeAccessToken(userId),
     refreshToken: makeRefreshToken(userId),
   };
 }
-
 function sendAuthCookies(res, accessToken, refreshToken) {
   res
     .cookie("accessToken", accessToken, {
@@ -63,7 +56,6 @@ function sendAuthCookies(res, accessToken, refreshToken) {
       secure: true,
     });
 }
-
 function sendUserInfoResponse(res, user) {
   res.json({
     success: true,
@@ -75,7 +67,6 @@ function sendUserInfoResponse(res, user) {
     },
   });
 }
-
 module.exports = {
   configureOAuthClient,
   getOAuthTokens,

@@ -1,8 +1,6 @@
 const User = require("../models/User");
-
 const Project = require("../models/Project");
 const Log = require("../models/Log");
-
 const CustomError = require("../utils/customError");
 const { uploadFileToS3 } = require("../utils/aws");
 const {
@@ -21,15 +19,12 @@ const login = async (req, res, next) => {
     const auth = configureOAuthClient();
     const tokens = await getOAuthTokens(req.body.code, auth);
     const userInfo = await fetchGoogleUserInfo(auth);
-
     let user = await User.findOne({ email: userInfo.email }).lean();
-
     if (!user) {
       user = await createUser(userInfo, tokens);
     } else {
       await updateUserTokens(user._id, tokens);
     }
-
     const { accessToken, refreshToken } = generateTokens(user._id);
     sendAuthCookies(res, accessToken, refreshToken);
     sendUserInfoResponse(res, user);
@@ -37,7 +32,6 @@ const login = async (req, res, next) => {
     next(error);
   }
 };
-
 const logout = async (req, res, next) => {
   try {
     res.clearCookie("AccessToken", { httpOnly: true });
@@ -46,26 +40,21 @@ const logout = async (req, res, next) => {
     next(error);
   }
 };
-
 const getUserProfile = async (req, res, next) => {
   try {
     const {
       params: { id },
       user,
     } = req;
-
     if (id !== user) {
       throw new CustomError("Unauthorized", 401);
     }
-
     const findUser = await User.findById(id);
-
     res.json({ success: true, findUser });
   } catch (error) {
     next(error);
   }
 };
-
 const editUserProfile = async (req, res, next) => {
   try {
     const {
@@ -73,11 +62,9 @@ const editUserProfile = async (req, res, next) => {
       params: { id },
       body: { email, userName, fileName },
     } = req;
-
     if (user !== id) {
       throw new CustomError("Unauthorized", 401);
     }
-
     if (req.file) {
       const avatarFile = {
         name: `${new Date().toISOString()}-${userName}-${fileName}`,
@@ -93,7 +80,6 @@ const editUserProfile = async (req, res, next) => {
         },
         { new: true },
       );
-
       res.json({ success: true, updatedUser });
     } else {
       const updatedUser = await User.findByIdAndUpdate(
@@ -104,14 +90,12 @@ const editUserProfile = async (req, res, next) => {
         },
         { new: true },
       );
-
       res.json({ success: true, updatedUser });
     }
   } catch (error) {
     next(error);
   }
 };
-
 const getUserProjects = async (req, res, next) => {
   try {
     const { user } = req;
@@ -120,7 +104,6 @@ const getUserProjects = async (req, res, next) => {
       select: "title dbUrl sheetUrl collectionCount createdAt",
       options: { sort: { createdAt: -1 } },
     });
-
     res.json({
       success: true,
       projectsLength: findUser.projects.length,
@@ -130,7 +113,6 @@ const getUserProjects = async (req, res, next) => {
     next(error);
   }
 };
-
 const getUserProjectsLogs = async (req, res, next) => {
   try {
     const user = "65cc4c19cef51953f78b674a";
@@ -141,13 +123,11 @@ const getUserProjectsLogs = async (req, res, next) => {
         createdAt: -1,
       })
       .populate("project");
-
     res.json({ success: true, logs: projectLogs });
   } catch (error) {
     next(error);
   }
 };
-
 const validateUser = async (req, res, next) => {
   try {
     if (req.user) {
@@ -158,7 +138,6 @@ const validateUser = async (req, res, next) => {
         email: user.email,
         avatarUrl: user.avatarUrl,
       };
-
       res.json({ success: true, userInfo });
     } else {
       res.json({ success: false });
@@ -167,7 +146,6 @@ const validateUser = async (req, res, next) => {
     next(error);
   }
 };
-
 module.exports = {
   login,
   logout,

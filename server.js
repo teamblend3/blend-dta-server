@@ -8,6 +8,7 @@ require("./db");
 const { swaggerUi, specs } = require("./modules/swagger");
 const projectRoute = require("./routes/projectRoute");
 const userRoute = require("./routes/userRoute");
+// const observerDb = require("./utils/observerDb");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -46,6 +47,8 @@ app.use((err, req, res) => {
   res.status(err.status || 500);
   res.json({ success: false, error: err.message });
 });
+
+// observerDb();
 
 app.listen(PORT, () =>
   console.log(`Server listening on http://localhost:${PORT}`),

@@ -1,10 +1,23 @@
-const bcrypt = require("bcrypt");
-const { SALT_ROUNDS } = require("./constants");
+const CryptoJS = require("crypto-js");
 
-const hashPassword = async password => {
-  const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+const hashPassword = password => {
+  const hashedPassword = CryptoJS.AES.encrypt(
+    password,
+    process.env.SECRET_KEY,
+  ).toString();
 
   return hashedPassword;
+};
+
+const decryptPassword = hashedPassword => {
+  try {
+    const bytes = CryptoJS.AES.decrypt(hashedPassword, process.env.SECRET_KEY);
+    const password = bytes.toString(CryptoJS.enc.Utf8);
+
+    return password;
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 const formatCurrentDate = () => {
@@ -18,4 +31,4 @@ const formatCurrentDate = () => {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
-module.exports = { hashPassword, formatCurrentDate };
+module.exports = { hashPassword, decryptPassword, formatCurrentDate };
