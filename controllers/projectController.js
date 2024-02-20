@@ -134,7 +134,10 @@ const synchronize = async (req, res, next) => {
     const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
     const databaseConnection = mongoose.createConnection(URL);
     const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
-    const isExistingProject = await Project.findOne({ title: dbTableName });
+    const isExistingProject = await Project.findOne({
+      title: dbTableName,
+      creator: user._id,
+    });
 
     if (isExistingProject) {
       return res.status(400).json({ error: "Selected Table already exists." });
