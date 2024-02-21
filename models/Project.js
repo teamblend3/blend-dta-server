@@ -21,19 +21,9 @@ const projectSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  collectionCount: {
-    type: Number,
-    required: true,
-  },
   collectionNames: [
     {
       type: String,
-      default: [],
-    },
-  ],
-  dataPreview: [
-    {
-      type: Object,
       default: [],
     },
   ],

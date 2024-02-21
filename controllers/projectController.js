@@ -13,19 +13,84 @@ const {
   appendToSheet,
   getDataPreview,
 } = require("../utils/synchronizeUtils");
-const { hashPassword } = require("../utils/typeConversionUtils");
-const { STATUS_MESSAGE } = require("../utils/constants");
+const {
+  hashPassword,
+  decryptPassword,
+} = require("../utils/typeConversionUtils");
+const { STATUS_MESSAGE, CREATE_LOG_MESSAGE } = require("../utils/constants");
 const CustomError = require("../utils/customError");
 
 const getProject = async (req, res, next) => {
   try {
     const {
-      user,
       params: { id },
     } = req;
-    const findProject = await Project.findById(id);
 
-    res.json({ success: true, project: findProject });
+    const findProject = await Project.findById(id);
+    const { title, dbId, dbUrl, dbPassword } = findProject;
+    const password = decryptPassword(dbPassword);
+    const URL = createMongoDbUrl(dbId, password, dbUrl, title);
+    const databaseConnection = mongoose.createConnection(URL);
+
+    databaseConnection.once("connected", async () => {
+      const selectedDatabase = databaseConnection.db;
+      const collections = await selectedDatabase.listCollections().toArray();
+      const keys = collections.map(async ({ name }) => {
+        const nameCollection = selectedDatabase.collection(name);
+        const collectionDataTypes = await nameCollection
+          .aggregate([
+            {
+              $project: {
+                arrayOfKeyValues: {
+                  $objectToArray: "$$ROOT",
+                },
+              },
+            },
+            { $unwind: "$arrayOfKeyValues" },
+            {
+              $group: {
+                _id: "$arrayOfKeyValues.k",
+                types: {
+                  $addToSet: {
+                    $type: "$arrayOfKeyValues.v",
+                  },
+                },
+              },
+            },
+          ])
+          .toArray();
+        return { [name]: collectionDataTypes };
+      });
+
+      const schema = await Promise.all(keys);
+      const collectionNames = collections.map(collection => collection.name);
+      const fetchDataPromises = collections.map(async collection => {
+        const collectionName = collection.name;
+        return selectedDatabase.collection(collectionName).find().toArray();
+      });
+      const fetchedData = await Promise.all(fetchDataPromises);
+      const dataPreview = getDataPreview(collectionNames, fetchedData);
+      databaseConnection.close();
+
+      res.json({ success: true, project: findProject, schema, dataPreview });
+    });
+
+    databaseConnection.on("error", error => {
+      throw new CustomError("Connection Fail", 500);
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getProjectLogs = async (req, res, next) => {
+  try {
+    const {
+      params: { id },
+    } = req;
+
+    const findLogs = await Log.find({ project: id }).sort({ createdAt: -1 });
+    res.json({ success: true, logs: findLogs });
   } catch (error) {
     next(error);
   }
@@ -170,7 +235,7 @@ const synchronize = async (req, res, next) => {
 
       const findUser = await User.findById(req.user);
       const { oauthAccessToken, oauthRefreshToken } = findUser;
-      const { collectionCount } = await appendToSheet(
+      await appendToSheet(
         sheetUrl,
         dataToGoogle,
         oauthAccessToken,
@@ -178,17 +243,13 @@ const synchronize = async (req, res, next) => {
         collectionNames,
       );
 
-      const dataPreview = getDataPreview(collectionNames, fetchedData);
-
       const project = await Project.create({
         title: dbTableName,
         dbUrl,
         dbId,
-        dbPassword: await hashPassword(dbPassword),
+        dbPassword: hashPassword(dbPassword),
         sheetUrl,
-        collectionCount,
         collectionNames,
-        dataPreview,
         createdAt: new Date().toISOString(),
         creator: user,
       });
@@ -205,11 +266,9 @@ const synchronize = async (req, res, next) => {
 
       await Log.create({
         type: "CREATE",
-        message: "Project created successfully",
+        message: CREATE_LOG_MESSAGE,
         project: project._id,
       });
-
-      databaseConnection.close();
 
       res.json({ success: true });
     });
@@ -250,6 +309,7 @@ const getTaskStatus = async (req, res, next) => {
 
 module.exports = {
   getProject,
+  getProjectLogs,
   generateSheetUrl,
   validateDb,
   validateSheet,

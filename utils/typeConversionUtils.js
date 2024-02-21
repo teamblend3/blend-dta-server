@@ -7,6 +7,7 @@ const hashPassword = password => {
   ).toString();
   return hashedPassword;
 };
+
 const decryptPassword = hashedPassword => {
   try {
     const bytes = CryptoJS.AES.decrypt(hashedPassword, process.env.SECRET_KEY);
@@ -16,6 +17,7 @@ const decryptPassword = hashedPassword => {
     console.log(error);
   }
 };
+
 const formatCurrentDate = () => {
   const currentDate = new Date();
   const year = currentDate.getFullYear();

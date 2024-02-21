@@ -13,6 +13,11 @@ const logSchema = new mongoose.Schema({
     type: Date,
     default: new Date(),
   },
+  collectionName: {
+    type: String,
+    required: true,
+    default: "all",
+  },
   project: {
     type: mongoose.Types.ObjectId,
     ref: "Project",
