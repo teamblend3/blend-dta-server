@@ -76,6 +76,16 @@ function sendUserInfoResponse(res, user) {
   });
 }
 
+function clearCookies(res) {
+  res
+    .clearCookie("accessToken", {
+      httpOnly: true,
+    })
+    .clearCookie("refreshToken", {
+      httpOnly: true,
+    });
+}
+
 module.exports = {
   configureOAuthClient,
   getOAuthTokens,
@@ -85,4 +95,5 @@ module.exports = {
   generateTokens,
   sendAuthCookies,
   sendUserInfoResponse,
+  clearCookies,
 };

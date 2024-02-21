@@ -43,7 +43,7 @@ const verifyToken = async (req, res, next) => {
       return next();
     }
 
-    if (!decodedRefreshToken || decodedRefreshToken.message === "expired jwt") {
+    if (!decodedRefreshToken || decodedRefreshToken.message === "jwt expired") {
       res.clearCookie("accessToken");
       res.clearCookie("refreshToken");
       return next(createHttpError(401, "Unauthorized - Invalid Refresh Token"));
