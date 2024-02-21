@@ -62,7 +62,6 @@ const appendToSheet = async (
     });
 
     const sheets = google.sheets({ version: "v4", auth });
-    const tabCounts = Math.max(data.length, 1);
 
     const requests = collectionNames.map(name => ({
       addSheet: {
@@ -97,11 +96,6 @@ const appendToSheet = async (
         resource: { values },
       });
     });
-
-    return {
-      message: true,
-      collectionCount: tabCounts,
-    };
   } catch (error) {
     console.error("에러", error);
 
@@ -109,19 +103,19 @@ const appendToSheet = async (
       console.error("Google API 응답 에러:", error.response.data.error);
       throw error;
     }
-
-    return {
-      message: false,
-      error: "에러 발생",
-    };
   }
 };
 
 const getDataPreview = (collectionNames, fetchedData) => {
-  const firstData = fetchedData.map(collection => collection[0]);
-  const dataPreview = collectionNames.map((collectionName, index) => ({
-    [collectionName]: firstData[index],
-  }));
+  const firstData = fetchedData.map(collection =>
+    collection.length > 1 ? [collection[0], collection[1]] : [collection[0]],
+  );
+  const dataPreview = {};
+
+  collectionNames.forEach((collectionName, index) => {
+    const ObjToArr = firstData[index].map(data => Object.entries(data));
+    dataPreview[collectionName] = ObjToArr;
+  });
 
   return dataPreview;
 };

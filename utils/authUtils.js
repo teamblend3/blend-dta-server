@@ -23,6 +23,7 @@ const fetchGoogleUserInfo = async auth => {
   const { data } = await userAuth.userinfo.get();
   return data;
 };
+
 const createUser = async (userInfo, tokens) => {
   const newUser = await User.create({
     email: userInfo.email,
@@ -34,6 +35,7 @@ const createUser = async (userInfo, tokens) => {
   });
   return newUser;
 };
+
 const updateUserTokens = async (userId, tokens) => {
   await User.findByIdAndUpdate(userId, {
     oauthAccessToken: tokens.access_token,
@@ -74,7 +76,7 @@ const sendUserInfoResponse = (res, user) => {
   });
 };
 
-function clearCookies(res) {
+const clearCookies = res => {
   res
     .clearCookie("accessToken", {
       httpOnly: true,
@@ -82,7 +84,7 @@ function clearCookies(res) {
     .clearCookie("refreshToken", {
       httpOnly: true,
     });
-}
+};
 
 module.exports = {
   configureOAuthClient,

@@ -49,7 +49,6 @@ const verifyToken = async (req, res, next) => {
       return next(createHttpError(401, "Unauthorized - Invalid Refresh Token"));
     }
 
-    // 모든 검증 실패 시
     return next(createHttpError(401, "Unauthorized"));
   } catch (error) {
     return next(
