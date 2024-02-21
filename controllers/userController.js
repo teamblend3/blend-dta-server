@@ -32,6 +32,7 @@ const login = async (req, res, next) => {
     next(error);
   }
 };
+
 const logout = async (req, res, next) => {
   try {
     res.clearCookie("AccessToken", { httpOnly: true });
@@ -40,6 +41,7 @@ const logout = async (req, res, next) => {
     next(error);
   }
 };
+
 const getUserProfile = async (req, res, next) => {
   try {
     const {
@@ -55,6 +57,7 @@ const getUserProfile = async (req, res, next) => {
     next(error);
   }
 };
+
 const editUserProfile = async (req, res, next) => {
   try {
     const {
@@ -96,12 +99,13 @@ const editUserProfile = async (req, res, next) => {
     next(error);
   }
 };
+
 const getUserProjects = async (req, res, next) => {
   try {
     const { user } = req;
     const findUser = await User.findById(user).populate({
       path: "projects",
-      select: "title dbUrl sheetUrl collectionCount createdAt",
+      select: "title dbUrl sheetUrl collectionNames createdAt",
       options: { sort: { createdAt: -1 } },
     });
     res.json({
@@ -113,21 +117,26 @@ const getUserProjects = async (req, res, next) => {
     next(error);
   }
 };
+
 const getUserProjectsLogs = async (req, res, next) => {
   try {
-    const user = "65cc4c19cef51953f78b674a";
+    const { user } = req;
     const findProjects = await Project.find({ creator: user });
     const projectIds = findProjects.map(project => project._id);
     const projectLogs = await Log.find({ project: { $in: projectIds } })
       .sort({
         createdAt: -1,
       })
-      .populate("project");
+      .populate({
+        path: "project",
+        select: "title",
+      });
     res.json({ success: true, logs: projectLogs });
   } catch (error) {
     next(error);
   }
 };
+
 const validateUser = async (req, res, next) => {
   try {
     if (req.user) {
@@ -146,6 +155,7 @@ const validateUser = async (req, res, next) => {
     next(error);
   }
 };
+
 module.exports = {
   login,
   logout,
