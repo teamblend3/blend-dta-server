@@ -12,6 +12,7 @@ const {
   sendAuthCookies,
   generateTokens,
   sendUserInfoResponse,
+  clearCookies,
 } = require("../utils/authUtils");
 
 const login = async (req, res, next) => {
@@ -35,7 +36,7 @@ const login = async (req, res, next) => {
 
 const logout = async (req, res, next) => {
   try {
-    res.clearCookie("AccessToken", { httpOnly: true });
+    clearCookies(res);
     res.json({ success: true });
   } catch (error) {
     next(error);
