@@ -1,8 +1,9 @@
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const observerDbs = require("../utils/observerDbs");
 
-async function expressLoader(app) {
+const expressLoader = async app => {
   const PORT = process.env.PORT || 3001;
 
   app.use(
@@ -15,9 +16,11 @@ async function expressLoader(app) {
   app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
 
+  observerDbs();
+
   app.listen(PORT, () =>
     console.log(`Server listening on http://localhost:${PORT}`),
   );
-}
+};
 
 module.exports = expressLoader;

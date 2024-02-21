@@ -1,6 +1,6 @@
 const createError = require("http-errors");
 
-async function errorHandlerLoader(app) {
+const errorHandlerLoader = async app => {
   app.use((req, res, next) => {
     next(createError(404));
   });
@@ -12,6 +12,6 @@ async function errorHandlerLoader(app) {
     res.status(err.status || 500);
     res.json({ message: err.message });
   });
-}
+};
 
 module.exports = errorHandlerLoader;

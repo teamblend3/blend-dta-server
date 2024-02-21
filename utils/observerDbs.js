@@ -4,7 +4,7 @@ const { createMongoDbUrl } = require("./synchronizeUtils");
 const { decryptPassword } = require("./typeConversionUtils");
 const Log = require("../models/Log");
 
-const observerDb = async () => {
+const observerDbs = async () => {
   const allProjects = await Project.find();
 
   allProjects.forEach(async project => {
@@ -23,12 +23,13 @@ const observerDb = async () => {
           ns: { coll },
           documentKey: { _id },
         } = change;
-
+        console.log(change);
         const type = operationType.toUpperCase();
 
         await Log.create({
           type,
           message: `${type}${operationDescription ? ` ${operationDescription}` : ""} ${_id.toString()} WHERE: ${coll}`,
+          collectionName: coll,
           project: project._id,
         });
       });
@@ -44,4 +45,4 @@ const observerDb = async () => {
   });
 };
 
-module.exports = observerDb;
+module.exports = observerDbs;
