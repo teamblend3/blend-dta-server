@@ -1,8 +1,51 @@
 const { google } = require("googleapis");
 const { GOOGLE_SHEET_SCOPES } = require("./constants");
+const User = require("../models/User");
+const { configureOAuthClient } = require("./authUtils");
+const Project = require("../models/Project");
+const CustomError = require("./customError");
 
 const createMongoDbUrl = (id, password, url, tableName) => {
   return `mongodb+srv://${id}:${password}@${url}${tableName ? `/${tableName}` : ""}`;
+};
+
+const checkForExistingProject = async (dbUrl, dbTableName, user) => {
+  const isExistingProject = await Project.findOne({
+    dbUrl,
+    title: dbTableName,
+    creator: user,
+  });
+
+  if (isExistingProject) {
+    throw new CustomError(
+      "You already have selected Table already exists.",
+      400,
+    );
+  }
+};
+
+const generateSheetUrl = async user => {
+  const findUser = await User.findById(user);
+  const auth = configureOAuthClient();
+  auth.forceRefreshOnFailure = true;
+  auth.setCredentials({
+    access_token: findUser.oauthAccessToken,
+    refresh_token: findUser.oauthRefreshToken,
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+  const response = await sheets.spreadsheets.create({
+    resource: {
+      properties: {
+        title: `${new Date().toISOString()} 스프레드시트`,
+      },
+    },
+  });
+  const {
+    data: { spreadsheetUrl: sheetUrl },
+  } = response;
+
+  return sheetUrl;
 };
 
 const fetchFromDatabase = async selectedDatabase => {
@@ -122,6 +165,8 @@ const getDataPreview = (collectionNames, fetchedData) => {
 
 module.exports = {
   createMongoDbUrl,
+  checkForExistingProject,
+  generateSheetUrl,
   fetchFromDatabase,
   formatDbData,
   appendToSheet,
