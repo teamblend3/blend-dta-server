@@ -76,7 +76,8 @@ const getProject = async (req, res, next) => {
     });
 
     databaseConnection.on("error", error => {
-      throw new CustomError("Connection Fail", 500);
+      next(error);
+      databaseConnection.close();
     });
   } catch (error) {
     next(error);
@@ -116,14 +117,15 @@ const validateDb = async (req, res, next) => {
     });
 
     databaseConnection.on("error", error => {
-      throw new CustomError("Connection Fail", 400);
+      next(error);
+      databaseConnection.close();
     });
 
     process.on("unhandledRejection", (reason, promise) => {
       console.log("Unhandled Rejection at:", promise, "reason:", reason);
     });
   } catch (error) {
-    throw new CustomError(error.message, 500);
+    next(error);
   }
 };
 
@@ -201,11 +203,13 @@ const synchronize = async (req, res, next) => {
     const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
     const isExistingProject = await Project.findOne({
       title: dbTableName,
-      creator: user._id,
+      creator: user,
     });
 
     if (isExistingProject) {
-      return res.status(400).json({ error: "Selected Table already exists." });
+      return res
+        .status(400)
+        .json({ error: "You already have selected Table already exists." });
     }
 
     databaseConnection.on("connected", async () => {
@@ -273,15 +277,12 @@ const synchronize = async (req, res, next) => {
       res.json({ success: true });
     });
 
-    databaseConnection.on("error", async err => {
+    databaseConnection.on("error", async error => {
       await TaskStatus.findByIdAndUpdate(spreadSheetId, {
         message: STATUS_MESSAGE.FAIL,
       });
 
-      res.status(400).json({
-        success: false,
-        message: err.message,
-      });
+      next(error);
 
       databaseConnection.close();
     });
