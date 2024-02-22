@@ -12,6 +12,8 @@ const {
   formatDbData,
   appendToSheet,
   getDataPreview,
+  generateSheetUrl,
+  checkForExistingProject,
 } = require("../utils/synchronizeUtils");
 const {
   hashPassword,
@@ -160,61 +162,25 @@ const validateSheet = async (req, res, next) => {
   }
 };
 
-const generateSheetUrl = async (req, res, next) => {
-  try {
-    const findUser = await User.findById(req.user);
-    const auth = new google.auth.OAuth2(
-      process.env.CLIENT_ID,
-      process.env.CLIENT_SECRET,
-    );
-
-    auth.forceRefreshOnFailure = true;
-    auth.setCredentials({
-      access_token: findUser.oauthAccessToken,
-      refresh_token: findUser.oauthRefreshToken,
-    });
-
-    const sheets = google.sheets({ version: "v4", auth });
-    const response = await sheets.spreadsheets.create({
-      resource: {
-        properties: {
-          title: `${new Date().toISOString()} 스프레드시트`,
-        },
-      },
-    });
-    const {
-      data: { spreadsheetUrl: sheetUrl },
-    } = response;
-
-    res.json({ success: true, sheetUrl });
-  } catch (error) {
-    next(new CustomError(error.message, 500));
-  }
-};
-
 const synchronize = async (req, res, next) => {
   try {
-    const {
-      user,
-      body: { dbUrl, dbId, dbPassword, dbTableName, sheetUrl },
-    } = req;
+    const { user, body } = req;
+    const { dbUrl, dbId, dbPassword, dbTableName, sheetUrl } = body;
+
+    await checkForExistingProject(dbUrl, dbTableName, user);
+
     const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
     const databaseConnection = mongoose.createConnection(URL);
-    const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
-    const isExistingProject = await Project.findOne({
-      title: dbTableName,
-      creator: user,
-    });
-
-    if (isExistingProject) {
-      return res
-        .status(400)
-        .json({ error: "You already have selected Table already exists." });
-    }
 
     databaseConnection.on("connected", async () => {
+      let sheetURI = sheetUrl;
+
+      if (sheetURI === "https://www.AUTO_GENERATE.com") {
+        sheetURI = await generateSheetUrl(user);
+      }
+
       const taskStatus = await TaskStatus.create({
-        statusId: spreadSheetId,
+        statusId: `${dbUrl}-${dbTableName}-${user}`,
         message: STATUS_MESSAGE.CONNECTED,
       });
 
@@ -239,8 +205,9 @@ const synchronize = async (req, res, next) => {
 
       const findUser = await User.findById(req.user);
       const { oauthAccessToken, oauthRefreshToken } = findUser;
+
       await appendToSheet(
-        sheetUrl,
+        sheetURI,
         dataToGoogle,
         oauthAccessToken,
         oauthRefreshToken,
@@ -252,7 +219,7 @@ const synchronize = async (req, res, next) => {
         dbUrl,
         dbId,
         dbPassword: hashPassword(dbPassword),
-        sheetUrl,
+        sheetUrl: sheetURI,
         collectionNames,
         createdAt: new Date().toISOString(),
         creator: user,
@@ -274,11 +241,11 @@ const synchronize = async (req, res, next) => {
         project: project._id,
       });
 
-      res.json({ success: true });
+      res.json({ success: true, project });
     });
 
     databaseConnection.on("error", async error => {
-      await TaskStatus.findByIdAndUpdate(spreadSheetId, {
+      await TaskStatus.findByIdAndUpdate(`${dbUrl}-${dbTableName}-${user}`, {
         message: STATUS_MESSAGE.FAIL,
       });
 
@@ -298,10 +265,13 @@ const synchronize = async (req, res, next) => {
 const getTaskStatus = async (req, res, next) => {
   try {
     const {
-      params: { id },
+      query: { db, table },
+      user,
     } = req;
-    const taskStatus = await TaskStatus.findOne({ statusId: id });
 
+    const taskStatus = await TaskStatus.findOne({
+      statusId: `${db}-${table}-${user}`,
+    });
     res.json({ success: true, status: taskStatus?.message });
   } catch (error) {
     next(error);
