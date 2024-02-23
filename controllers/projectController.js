@@ -21,6 +21,7 @@ const {
 } = require("../utils/typeConversionUtils");
 const { STATUS_MESSAGE, CREATE_LOG_MESSAGE } = require("../utils/constants");
 const CustomError = require("../utils/customError");
+const observerDbs = require("../utils/observerDbs");
 
 const getProject = async (req, res, next) => {
   try {
@@ -228,6 +229,8 @@ const synchronize = async (req, res, next) => {
       findUser.projects.push(project._id);
 
       await findUser.save();
+
+      observerDbs();
 
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
         message: STATUS_MESSAGE.TRANSFERRED,
