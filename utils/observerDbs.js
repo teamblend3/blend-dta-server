@@ -11,7 +11,7 @@ const observerDbs = async () => {
   const allProjects = await Project.find();
 
   allProjects.forEach(async project => {
-    const { title, dbId, dbPassword, dbUrl, sheetUrl } = project;
+    const { title, dbId, dbPassword, dbUrl, sheetUrl, creator } = project;
     const password = decryptPassword(dbPassword);
     const URL = createMongoDbUrl(dbId, password, dbUrl, title);
 
@@ -27,10 +27,10 @@ const observerDbs = async () => {
           documentKey: { _id },
           updateDescription: { updatedFields },
         } = change;
-        console.log(change);
+        // console.log(change);
         const type = operationType.toUpperCase();
+        const findUser = await User.findById(creator);
 
-        const findUser = await User.findOne({ projects: project._id });
         const { oauthAccessToken, oauthRefreshToken } = findUser;
         const spreadSheetId = sheetUrl.split("/d/")[1].split("/")[0];
 
