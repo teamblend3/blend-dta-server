@@ -84,6 +84,25 @@ const formatDbData = async collections => {
   });
 };
 
+const createProtectionRequest = (spreadsheetId, sheetId) => {
+  return {
+    spreadsheetId,
+    resource: {
+      requests: [
+        {
+          addProtectedRange: {
+            protectedRange: {
+              range: {
+                sheetId,
+              },
+            },
+          },
+        },
+      ],
+    },
+  };
+};
+
 const appendToSheet = async (
   sheetUrl,
   data,
@@ -105,8 +124,7 @@ const appendToSheet = async (
     });
 
     const sheets = google.sheets({ version: "v4", auth });
-
-    const requests = collectionNames.map(name => ({
+    const addSheetRequests = collectionNames.map(name => ({
       addSheet: {
         properties: {
           title: name,
@@ -114,7 +132,7 @@ const appendToSheet = async (
       },
     }));
 
-    requests.push({
+    addSheetRequests.push({
       updateSheetProperties: {
         properties: {
           sheetId: 0,
@@ -124,21 +142,41 @@ const appendToSheet = async (
       },
     });
 
-    await sheets.spreadsheets.batchUpdate({
+    const batchUpdateResponse = await sheets.spreadsheets.batchUpdate({
       spreadsheetId: spreadSheetId,
-      resource: { requests },
+      resource: { requests: addSheetRequests },
     });
 
-    data.forEach(async (values, i) => {
-      const range = `${collectionNames[i]}!A1`;
+    const updatedSpreadSheetId = batchUpdateResponse.data.spreadsheetId;
 
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: spreadSheetId,
-        range,
-        valueInputOption: "RAW",
-        resource: { values },
-      });
-    });
+    await Promise.all(
+      data.map(async (values, i) => {
+        const range = `${collectionNames[i]}!A1`;
+
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: updatedSpreadSheetId,
+          range,
+          valueInputOption: "RAW",
+          resource: { values },
+        });
+
+        const sheetsInfo = await sheets.spreadsheets.get({
+          spreadsheetId: updatedSpreadSheetId,
+          ranges: collectionNames.map(name => name),
+          includeGridData: false,
+        });
+
+        const { sheetId } = sheetsInfo.data.sheets.find(
+          sheet => sheet.properties.title === collectionNames[i],
+        ).properties;
+        const protectionRequest = createProtectionRequest(
+          updatedSpreadSheetId,
+          sheetId,
+        );
+
+        await sheets.spreadsheets.batchUpdate(protectionRequest);
+      }),
+    );
   } catch (error) {
     console.error("에러", error);
 
