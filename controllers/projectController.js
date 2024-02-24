@@ -1,5 +1,7 @@
 const { google } = require("googleapis");
 const mongoose = require("mongoose");
+const xlsx = require("xlsx");
+const { PassThrough } = require("stream");
 
 const User = require("../models/User");
 const Project = require("../models/Project");
@@ -22,6 +24,10 @@ const {
 const { STATUS_MESSAGE, CREATE_LOG_MESSAGE } = require("../utils/constants");
 const CustomError = require("../utils/customError");
 const observerDbs = require("../utils/observerDbs");
+const {
+  fetchDataFromDatabase,
+  transformData,
+} = require("../utils/exportExcelUtils");
 
 const getProject = async (req, res, next) => {
   try {
@@ -281,6 +287,44 @@ const getTaskStatus = async (req, res, next) => {
   }
 };
 
+const downloadExcel = async (req, res, next) => {
+  try {
+    const {
+      user,
+      body: { collection, columns },
+      params: { id },
+    } = req;
+    const { title, dbId, dbUrl, dbPassword } = await Project.findById(id);
+    const dbConfig = {
+      title,
+      dbId,
+      dbUrl,
+      dbPassword,
+    };
+
+    const rawData = await fetchDataFromDatabase(collection, columns, dbConfig);
+    const transformedData = transformData(rawData);
+
+    const workbook = xlsx.utils.book_new();
+    const worksheet = xlsx.utils.json_to_sheet(transformedData);
+    xlsx.utils.book_append_sheet(workbook, worksheet, collection);
+    const buffer = await xlsx.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
+
+    res
+      .writeHead(200, {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${collection}.xlsx"`,
+      })
+      .end(buffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getProject,
   getProjectLogs,
@@ -289,4 +333,5 @@ module.exports = {
   validateSheet,
   synchronize,
   getTaskStatus,
+  downloadExcel,
 };
