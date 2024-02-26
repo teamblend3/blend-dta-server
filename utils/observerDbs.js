@@ -27,7 +27,6 @@ const observerDbs = async () => {
           documentKey: { _id },
           updateDescription: { updatedFields },
         } = change;
-        // console.log(change);
         const type = operationType.toUpperCase();
         const findUser = await User.findById(creator);
 

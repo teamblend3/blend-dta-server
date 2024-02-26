@@ -1,7 +1,6 @@
 const { google } = require("googleapis");
 const mongoose = require("mongoose");
 const xlsx = require("xlsx");
-const { PassThrough } = require("stream");
 
 const User = require("../models/User");
 const Project = require("../models/Project");
@@ -32,13 +31,15 @@ const {
 const getProject = async (req, res, next) => {
   try {
     const {
+      user,
       params: { id },
     } = req;
 
     const findProject = await Project.findById(id);
     const { title, dbId, dbUrl, dbPassword } = findProject;
     const password = decryptPassword(dbPassword);
-    const URL = createMongoDbUrl(dbId, password, dbUrl, title);
+    const tableName = user === process.env.MOCK_AUTH_ID ? "sample" : title;
+    const URL = createMongoDbUrl(dbId, password, dbUrl, tableName);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.once("connected", async () => {
@@ -172,7 +173,7 @@ const validateSheet = async (req, res, next) => {
 const synchronize = async (req, res, next) => {
   try {
     const { user, body } = req;
-    const { dbUrl, dbId, dbPassword, dbTableName, sheetUrl } = body;
+    const { dbUrl, dbId, dbPassword, dbTableName, sheetUrl, statusId } = body;
 
     await checkForExistingProject(dbUrl, dbTableName, user);
 
@@ -187,7 +188,7 @@ const synchronize = async (req, res, next) => {
       }
 
       const taskStatus = await TaskStatus.create({
-        statusId: `${dbUrl}-${dbTableName}-${user}`,
+        statusId,
         message: STATUS_MESSAGE.CONNECTED,
       });
 
@@ -271,15 +272,172 @@ const synchronize = async (req, res, next) => {
   }
 };
 
+const mockSynchronize = async (req, res, next) => {
+  try {
+    const { user, body } = req;
+    const { dbUrl, dbId, dbPassword, dbTableName, statusId } = body;
+    if (user !== process.env.MOCK_AUTH_ID) {
+      next(new CustomError("Unauthenticated", 401));
+    }
+
+    const findUser = await User.findById(process.env.MOCK_AUTH_ID);
+
+    await checkForExistingProject(dbUrl, dbTableName, user);
+
+    const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
+    const databaseConnection = mongoose.createConnection(URL);
+
+    databaseConnection.on("connected", async () => {
+      const taskStatus = await TaskStatus.create({
+        statusId,
+        message: STATUS_MESSAGE.CONNECTED,
+      });
+
+      const { db } = databaseConnection;
+      const collections = await db.listCollections().toArray();
+      const collectionNames = collections.map(collection => collection.name);
+
+      const workbook = xlsx.utils.book_new();
+
+      const result = {};
+
+      collections.forEach(async collection => {
+        const data = await db.collection(collection.name).find().toArray();
+        result[collection.name] = data;
+      });
+
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: STATUS_MESSAGE.FETCHED,
+      });
+
+      collections.forEach(async collection => {
+        const transformedData = transformData(result[collection.name]);
+        const worksheet = xlsx.utils.json_to_sheet(transformedData);
+        xlsx.utils.book_append_sheet(workbook, worksheet, collection.name);
+      });
+
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: STATUS_MESSAGE.FORMATTED,
+      });
+
+      const project = await Project.create({
+        title: `${dbTableName}-${findUser.projects.length}`,
+        dbUrl,
+        dbId,
+        dbPassword: hashPassword(dbPassword),
+        sheetUrl: "MOCK",
+        collectionNames,
+        createdAt: new Date().toISOString(),
+        creator: user,
+      });
+
+      findUser.projects.push(project._id);
+
+      await findUser.save();
+
+      await TaskStatus.findByIdAndUpdate(taskStatus._id, {
+        message: STATUS_MESSAGE.TRANSFERRED,
+        project: project._id,
+        createdAt: new Date().toISOString(),
+      });
+
+      await Log.create({
+        type: "CREATE",
+        message: CREATE_LOG_MESSAGE,
+        project: project._id,
+      });
+
+      const buffer = await xlsx.write(workbook, {
+        type: "buffer",
+        bookType: "xlsx",
+      });
+
+      observerDbs();
+
+      res
+        .writeHead(200, {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${dbTableName}.xlsx"`,
+        })
+        .end(buffer);
+    });
+
+    databaseConnection.on("error", async error => {
+      await TaskStatus.findByIdAndUpdate(`${dbUrl}-${dbTableName}-${user}`, {
+        message: STATUS_MESSAGE.FAIL,
+      });
+
+      next(error);
+
+      databaseConnection.close();
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const mockDownload = async (req, res, next) => {
+  try {
+    const {
+      user,
+      params: { id },
+    } = req;
+
+    if (user !== process.env.MOCK_AUTH_ID) {
+      next(new CustomError("Unauthenticated", 401));
+    }
+
+    const { dbId, dbUrl, dbPassword, dbTableName } = await Project.findById(id);
+    const findUser = await User.findById(process.env.MOCK_AUTH_ID);
+    await checkForExistingProject(dbUrl, dbTableName, user);
+    const password = decryptPassword(dbPassword);
+    const URL = createMongoDbUrl(dbId, password, dbUrl, "sample");
+    const databaseConnection = mongoose.createConnection(URL);
+
+    databaseConnection.on("connected", async () => {
+      const { db } = databaseConnection;
+      const collections = await db.listCollections().toArray();
+      const workbook = xlsx.utils.book_new();
+
+      collections.forEach(async collection => {
+        const data = await db.collection(collection.name).find().toArray();
+        const transformedData = transformData(data);
+        const worksheet = xlsx.utils.json_to_sheet(transformedData);
+        xlsx.utils.book_append_sheet(workbook, worksheet, collection.name);
+      });
+
+      const buffer = await xlsx.write(workbook, {
+        type: "buffer",
+        bookType: "xlsx",
+      });
+
+      res
+        .writeHead(200, {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${dbTableName}.xlsx"`,
+        })
+        .end(buffer);
+    });
+
+    databaseConnection.on("error", async error => {
+      next(error);
+
+      databaseConnection.close();
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getTaskStatus = async (req, res, next) => {
   try {
     const {
-      query: { db, table },
-      user,
+      query: { id },
     } = req;
-
     const taskStatus = await TaskStatus.findOne({
-      statusId: `${db}-${table}-${user}`,
+      statusId: id,
     });
     res.json({ success: true, status: taskStatus?.message });
   } catch (error) {
@@ -295,8 +453,9 @@ const downloadExcel = async (req, res, next) => {
       params: { id },
     } = req;
     const { title, dbId, dbUrl, dbPassword } = await Project.findById(id);
+    const tableName = user === process.env.MOCK_AUTH_ID ? "sample" : title;
     const dbConfig = {
-      title,
+      title: tableName,
       dbId,
       dbUrl,
       dbPassword,
@@ -304,7 +463,6 @@ const downloadExcel = async (req, res, next) => {
 
     const rawData = await fetchDataFromDatabase(collection, columns, dbConfig);
     const transformedData = transformData(rawData);
-
     const workbook = xlsx.utils.book_new();
     const worksheet = xlsx.utils.json_to_sheet(transformedData);
     xlsx.utils.book_append_sheet(workbook, worksheet, collection);
@@ -332,6 +490,8 @@ module.exports = {
   validateDb,
   validateSheet,
   synchronize,
+  mockSynchronize,
   getTaskStatus,
+  mockDownload,
   downloadExcel,
 };

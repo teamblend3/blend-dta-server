@@ -15,6 +15,17 @@ const {
   clearCookies,
 } = require("../utils/authUtils");
 
+const mockLogin = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ email: "teamblend3@gmail.com" }).lean();
+    const { accessToken, refreshToken } = generateTokens(user._id);
+    sendAuthCookies(res, accessToken, refreshToken);
+    sendUserInfoResponse(res, user);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const login = async (req, res, next) => {
   try {
     const auth = configureOAuthClient();
@@ -158,6 +169,7 @@ const validateUser = async (req, res, next) => {
 };
 
 module.exports = {
+  mockLogin,
   login,
   logout,
   getUserProfile,

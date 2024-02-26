@@ -8,6 +8,8 @@ const {
   generateSheetUrl,
   getTaskStatus,
   synchronize,
+  mockSynchronize,
+  mockDownload,
   downloadExcel,
 } = require("../controllers/projectController");
 
@@ -19,7 +21,9 @@ route.get("/:id/logs", verifyToken, getProjectLogs);
 route.post("/validation/db", verifyToken, validateDb);
 route.post("/validation/sheet", verifyToken, validateSheet);
 route.get("/generation/sheet", verifyToken, generateSheetUrl);
+route.post("/mock-sync", verifyToken, mockSynchronize);
 route.post("/sync", verifyToken, synchronize);
+route.get("/:id/download", verifyToken, mockDownload);
 route.post("/:id/download", verifyToken, downloadExcel);
 
 module.exports = route;
