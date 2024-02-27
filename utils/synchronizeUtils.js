@@ -4,9 +4,19 @@ const User = require("../models/User");
 const { configureOAuthClient } = require("./authUtils");
 const Project = require("../models/Project");
 const CustomError = require("./customError");
+const { decryptPassword } = require("./typeConversionUtils");
 
-const createMongoDbUrl = (id, password, url, tableName) => {
+const createMongoURI = (id, password, url, tableName) => {
   return `mongodb+srv://${id}:${password}@${url}${tableName ? `/${tableName}` : ""}`;
+};
+
+const createMongoDbUrl = project => {
+  const { dbId, dbUrl, dbPassword, creator, title } = project;
+  const isMock = creator.toString() === process.env.MOCK_AUTH_ID;
+  const tableName = isMock ? "sample" : title;
+  const password = decryptPassword(dbPassword);
+
+  return `mongodb+srv://${dbId}:${password}@${dbUrl}${tableName ? `/${tableName}` : ""}`;
 };
 
 const checkForExistingProject = async (dbUrl, dbTableName, user) => {
@@ -202,6 +212,7 @@ const getDataPreview = (collectionNames, fetchedData) => {
 };
 
 module.exports = {
+  createMongoURI,
   createMongoDbUrl,
   checkForExistingProject,
   generateSheetUrl,
