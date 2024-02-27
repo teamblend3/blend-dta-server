@@ -29,7 +29,8 @@ const projectSchema = new mongoose.Schema({
   ],
   createdAt: {
     type: Date,
-    default: new Date(),
+    required: true,
+    default: Date.now,
   },
   creator: {
     type: mongoose.Types.ObjectId,
