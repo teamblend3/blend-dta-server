@@ -2,6 +2,7 @@ const express = require("express");
 const { verifyToken } = require("../middlewares/authMiddleware");
 const {
   getProject,
+  deleteProject,
   getProjectLogs,
   validateDb,
   validateSheet,
@@ -17,6 +18,7 @@ const route = express.Router();
 
 route.get("/taskstatus", verifyToken, getTaskStatus);
 route.get("/:id", verifyToken, getProject);
+route.delete("/:id", verifyToken, deleteProject);
 route.get("/:id/logs", verifyToken, getProjectLogs);
 route.post("/validation/db", verifyToken, validateDb);
 route.post("/validation/sheet", verifyToken, validateSheet);
