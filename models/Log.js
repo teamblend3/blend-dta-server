@@ -11,7 +11,8 @@ const logSchema = new mongoose.Schema({
   },
   createdAt: {
     type: Date,
-    default: new Date(),
+    required: true,
+    default: Date.now,
   },
   collectionName: {
     type: String,

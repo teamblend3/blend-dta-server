@@ -1,12 +1,12 @@
 const mongoose = require("mongoose");
 
-const { createMongoDbUrl } = require("./synchronizeUtils");
 const { decryptPassword } = require("./typeConversionUtils");
+const { createMongoURI } = require("./synchronizeUtils");
 
 async function fetchDataFromDatabase(collection, columns, dbConfig) {
   const { dbId, dbPassword, dbUrl, title } = dbConfig;
   const passwordDecrypted = decryptPassword(dbPassword);
-  const URL = createMongoDbUrl(dbId, passwordDecrypted, dbUrl, title);
+  const URL = createMongoURI(dbId, passwordDecrypted, dbUrl, title);
   const connection = mongoose.createConnection(URL);
 
   return new Promise((resolve, reject) => {

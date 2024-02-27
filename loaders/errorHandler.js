@@ -10,7 +10,7 @@ const errorHandlerLoader = async app => {
     res.locals.error = req.app.get("env") === "development" ? err : {};
 
     res.status(err.status || 500);
-    res.json({ message: err.message });
+    res.json({ success: false, message: err.message });
   });
 };
 

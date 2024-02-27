@@ -15,11 +15,9 @@ const {
   getDataPreview,
   generateSheetUrl,
   checkForExistingProject,
+  createMongoURI,
 } = require("../utils/synchronizeUtils");
-const {
-  hashPassword,
-  decryptPassword,
-} = require("../utils/typeConversionUtils");
+const { hashPassword } = require("../utils/typeConversionUtils");
 const { STATUS_MESSAGE, CREATE_LOG_MESSAGE } = require("../utils/constants");
 const CustomError = require("../utils/customError");
 const observerDbs = require("../utils/observerDbs");
@@ -31,15 +29,11 @@ const {
 const getProject = async (req, res, next) => {
   try {
     const {
-      user,
       params: { id },
     } = req;
 
     const findProject = await Project.findById(id);
-    const { title, dbId, dbUrl, dbPassword } = findProject;
-    const password = decryptPassword(dbPassword);
-    const tableName = user === process.env.MOCK_AUTH_ID ? "sample" : title;
-    const URL = createMongoDbUrl(dbId, password, dbUrl, tableName);
+    const URL = createMongoDbUrl(findProject);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.once("connected", async () => {
@@ -94,6 +88,33 @@ const getProject = async (req, res, next) => {
   }
 };
 
+const deleteProject = async (req, res, next) => {
+  try {
+    const {
+      user,
+      params: { id },
+    } = req;
+
+    const findProject = await Project.findById(id);
+    console.log(findProject);
+    if (!findProject) {
+      throw new CustomError("Project not found", 404);
+    }
+
+    if (findProject.creator.toString() !== user) {
+      throw new CustomError("Unauthenticated", 401);
+    }
+
+    await TaskStatus.deleteMany({ project: id });
+    await Log.deleteMany({ project: id });
+    await User.findByIdAndUpdate(user, { $pull: { projects: id } });
+    await Project.findByIdAndDelete(id);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getProjectLogs = async (req, res, next) => {
   try {
     const {
@@ -112,7 +133,7 @@ const validateDb = async (req, res, next) => {
     const {
       body: { dbId, dbPassword, dbUrl },
     } = req;
-    const URL = createMongoDbUrl(dbId, dbPassword, dbUrl);
+    const URL = createMongoURI(dbId, dbPassword, dbUrl);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.once("connected", async () => {
@@ -177,7 +198,7 @@ const synchronize = async (req, res, next) => {
 
     await checkForExistingProject(dbUrl, dbTableName, user);
 
-    const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
+    const URL = createMongoURI(dbId, dbPassword, dbUrl, dbTableName);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.on("connected", async () => {
@@ -237,13 +258,13 @@ const synchronize = async (req, res, next) => {
 
       await findUser.save();
 
-      observerDbs();
-
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
         message: STATUS_MESSAGE.TRANSFERRED,
         project: project._id,
         createdAt: new Date().toISOString(),
       });
+
+      observerDbs();
 
       await Log.create({
         type: "CREATE",
@@ -276,15 +297,20 @@ const mockSynchronize = async (req, res, next) => {
   try {
     const { user, body } = req;
     const { dbUrl, dbId, dbPassword, dbTableName, statusId } = body;
+
     if (user !== process.env.MOCK_AUTH_ID) {
-      next(new CustomError("Unauthenticated", 401));
+      throw new CustomError("Unauthenticated", 401);
     }
 
-    const findUser = await User.findById(process.env.MOCK_AUTH_ID);
+    if (!dbUrl || !dbId || !dbPassword || !dbTableName) {
+      throw new CustomError(
+        "The database information entered is incorrect.",
+        400,
+      );
+    }
 
-    await checkForExistingProject(dbUrl, dbTableName, user);
-
-    const URL = createMongoDbUrl(dbId, dbPassword, dbUrl, dbTableName);
+    const findUser = await User.findById(user);
+    const URL = createMongoURI(dbId, dbPassword, dbUrl, dbTableName);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.on("connected", async () => {
@@ -301,26 +327,30 @@ const mockSynchronize = async (req, res, next) => {
 
       const result = {};
 
-      collections.forEach(async collection => {
-        const data = await db.collection(collection.name).find().toArray();
-        result[collection.name] = data;
-      });
+      await Promise.all(
+        collections.map(async collection => {
+          const data = await db.collection(collection.name).find().toArray();
+          result[collection.name] = data;
+        }),
+      );
 
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
         message: STATUS_MESSAGE.FETCHED,
       });
 
-      collections.forEach(async collection => {
-        const transformedData = transformData(result[collection.name]);
-        const worksheet = xlsx.utils.json_to_sheet(transformedData);
-        xlsx.utils.book_append_sheet(workbook, worksheet, collection.name);
-      });
+      await Promise.all(
+        Object.keys(result).map(async collectionName => {
+          const transformedData = transformData(result[collectionName]);
+          const worksheet = xlsx.utils.json_to_sheet(transformedData);
+          xlsx.utils.book_append_sheet(workbook, worksheet, collectionName);
+        }),
+      );
 
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
         message: STATUS_MESSAGE.FORMATTED,
       });
 
-      const project = await Project.create({
+      const newProject = await Project.create({
         title: `${dbTableName}-${findUser.projects.length}`,
         dbUrl,
         dbId,
@@ -331,20 +361,20 @@ const mockSynchronize = async (req, res, next) => {
         creator: user,
       });
 
-      findUser.projects.push(project._id);
+      findUser.projects.push(newProject._id);
 
       await findUser.save();
 
       await TaskStatus.findByIdAndUpdate(taskStatus._id, {
         message: STATUS_MESSAGE.TRANSFERRED,
-        project: project._id,
+        project: newProject._id,
         createdAt: new Date().toISOString(),
       });
 
       await Log.create({
         type: "CREATE",
         message: CREATE_LOG_MESSAGE,
-        project: project._id,
+        project: newProject._id,
       });
 
       const buffer = await xlsx.write(workbook, {
@@ -388,11 +418,10 @@ const mockDownload = async (req, res, next) => {
       next(new CustomError("Unauthenticated", 401));
     }
 
-    const { dbId, dbUrl, dbPassword, dbTableName } = await Project.findById(id);
-    const findUser = await User.findById(process.env.MOCK_AUTH_ID);
+    const findProject = await Project.findById(id);
+    const { dbUrl, dbTableName } = findProject;
     await checkForExistingProject(dbUrl, dbTableName, user);
-    const password = decryptPassword(dbPassword);
-    const URL = createMongoDbUrl(dbId, password, dbUrl, "sample");
+    const URL = createMongoDbUrl(findProject);
     const databaseConnection = mongoose.createConnection(URL);
 
     databaseConnection.on("connected", async () => {
@@ -400,12 +429,14 @@ const mockDownload = async (req, res, next) => {
       const collections = await db.listCollections().toArray();
       const workbook = xlsx.utils.book_new();
 
-      collections.forEach(async collection => {
-        const data = await db.collection(collection.name).find().toArray();
-        const transformedData = transformData(data);
-        const worksheet = xlsx.utils.json_to_sheet(transformedData);
-        xlsx.utils.book_append_sheet(workbook, worksheet, collection.name);
-      });
+      await Promise.all(
+        collections.map(async collection => {
+          const data = await db.collection(collection.name).find().toArray();
+          const transformedData = transformData(data);
+          const worksheet = xlsx.utils.json_to_sheet(transformedData);
+          xlsx.utils.book_append_sheet(workbook, worksheet, collection.name);
+        }),
+      );
 
       const buffer = await xlsx.write(workbook, {
         type: "buffer",
@@ -452,6 +483,7 @@ const downloadExcel = async (req, res, next) => {
       body: { collection, columns },
       params: { id },
     } = req;
+
     const { title, dbId, dbUrl, dbPassword } = await Project.findById(id);
     const tableName = user === process.env.MOCK_AUTH_ID ? "sample" : title;
     const dbConfig = {
@@ -485,6 +517,7 @@ const downloadExcel = async (req, res, next) => {
 
 module.exports = {
   getProject,
+  deleteProject,
   getProjectLogs,
   generateSheetUrl,
   validateDb,
